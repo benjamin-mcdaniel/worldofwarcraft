@@ -1,0 +1,116 @@
+{% extends "layout.html" %}
+
+{% block title %}WoW AH Tool{% endblock %}
+
+{% block content %}
+  <div class="page">
+    <div class="page__header">
+      <div>
+        <div class="h1">Market</div>
+        <div class="muted">Last browse scan time: {{ last_scan }}</div>
+      </div>
+      <div class="pill">Local • copy-first • file history</div>
+    </div>
+
+    <div class="card">
+      <div class="card__title">Search items</div>
+      <div class="search">
+        <input id="q" class="input" type="text" value="{{ query }}" placeholder="Type an item id (e.g. 210805)" autocomplete="off" />
+        <button id="go" class="btn">Open</button>
+      </div>
+      <div id="suggest" class="suggest"></div>
+
+      {% if query and results %}
+        <div class="divider"></div>
+        <div class="muted">Results</div>
+        <div class="list">
+          {% for item_id in results %}
+            <a class="list__row" href="/item/{{ item_id }}">
+              <div class="mono">{{ item_id }}</div>
+              <div class="muted">Open</div>
+            </a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <div class="card__title">Recently seen ({{ recent|length }})</div>
+      <div class="muted">Click an item to view its history. This list is preloaded so you don't need to know the right id.</div>
+      <div class="table">
+        <div class="table__head">
+          <div>Item ID</div>
+          <div>Latest unit</div>
+          <div>Last time</div>
+        </div>
+        {% for item_id in recent %}
+          <a class="table__row" href="/item/{{ item_id }}">
+            <div class="mono">{{ item_id }}</div>
+            <div class="mono">{{ state_latest(item_id) }}</div>
+            <div class="mono">{{ state_last_time(item_id) }}</div>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const q = document.getElementById('q');
+    const suggest = document.getElementById('suggest');
+    const go = document.getElementById('go');
+
+    function openItem(itemId) {
+      if (!itemId) return;
+      window.location.href = `/item/${itemId}`;
+    }
+
+    let lastAbort = null;
+    async function updateSuggest() {
+      const val = (q.value || '').trim();
+      if (!val) {
+        suggest.innerHTML = '';
+        return;
+      }
+      try {
+        if (lastAbort) lastAbort.abort();
+        lastAbort = new AbortController();
+        const resp = await fetch(`/api/suggest?q=${encodeURIComponent(val)}`, { signal: lastAbort.signal });
+        const data = await resp.json();
+        const items = (data.items || []).slice(0, 10);
+        if (!items.length) {
+          suggest.innerHTML = '<div class="muted" style="padding:10px 2px;">No suggestions</div>';
+          return;
+        }
+        suggest.innerHTML = items.map(i => {
+          const latest = i.latest == null ? '' : i.latest;
+          const lastTime = i.last_time == null ? '' : i.last_time;
+          return `<button class="suggest__row" type="button" data-item="${i.item_id}">
+              <div class="mono">${i.item_id}</div>
+              <div class="mono muted">${latest}</div>
+              <div class="mono muted">${lastTime}</div>
+            </button>`;
+        }).join('');
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    suggest.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('button[data-item]');
+      if (!btn) return;
+      openItem(btn.getAttribute('data-item'));
+    });
+
+    q.addEventListener('input', () => updateSuggest());
+    q.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        openItem(q.value.trim());
+      }
+    });
+    go.addEventListener('click', () => openItem(q.value.trim()));
+
+    // initial
+    updateSuggest();
+  </script>
+{% endblock %}

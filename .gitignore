@@ -1,0 +1,4 @@
+history/
+data/live/
+__pycache__/
+*.pyc

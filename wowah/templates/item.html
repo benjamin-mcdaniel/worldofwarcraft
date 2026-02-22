@@ -1,0 +1,39 @@
+{% extends "layout.html" %}
+
+{% block title %}Item {{ item_id }}{% endblock %}
+
+{% block content %}
+  <div class="page">
+    <div class="page__header">
+      <div>
+        <div class="h1">Item <span class="mono">{{ item_id }}</span></div>
+        <div class="muted">Last browse scan time: {{ last_scan }}</div>
+      </div>
+      <div class="stat">
+        <div class="stat__label">Latest unit</div>
+        <div class="stat__value mono">{{ latest }}</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card__title">History</div>
+      <div class="muted">Append-only file history from ingested posting history.</div>
+      <div class="table">
+        <div class="table__head">
+          <div>time</div>
+          <div>unit_price</div>
+          <div>quantity</div>
+          <div>scan_time</div>
+        </div>
+        {% for rec in history|reverse %}
+          <div class="table__row">
+            <div class="mono">{{ rec.time }}</div>
+            <div class="mono">{{ rec.unit_price }}</div>
+            <div class="mono">{{ rec.quantity }}</div>
+            <div class="mono">{{ rec.scan_time }}</div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+{% endblock %}
