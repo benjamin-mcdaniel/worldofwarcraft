@@ -12,6 +12,8 @@ from .history import JsonlHistoryStore
 from .item_meta import ItemMetaStore, icon_url
 from .state import AppState
 
+APP_VERSION = "0.2"
+
 
 def create_app(state: AppState, history_store: JsonlHistoryStore) -> FastAPI:
     app = FastAPI()
@@ -26,6 +28,10 @@ def create_app(state: AppState, history_store: JsonlHistoryStore) -> FastAPI:
     templates.env.globals["state_last_time"] = lambda item_id: state.latest_post_time(int(item_id))
     templates.env.globals["item_meta"] = lambda item_id: meta_store.get(int(item_id))
     templates.env.globals["item_icon_url"] = lambda icon: icon_url(icon)
+
+    @app.get("/api/ping")
+    def ping():
+        return {"ok": True, "app": "wowah", "version": APP_VERSION}
 
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request, q: str = ""):
@@ -46,57 +52,53 @@ def create_app(state: AppState, history_store: JsonlHistoryStore) -> FastAPI:
 
     @app.post("/api/import")
     def import_from_h_drive():
-        # Copy-first, then validate + ingest. Never parse the source path directly.
-        src = WOW_AUCTIONATOR_SOURCE
-        dst = WORKSPACE_AUCTIONATOR_COPY
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        tmp = dst.with_suffix(dst.suffix + ".tmp")
-        if not src.exists():
-            return {"ok": False, "error": f"Source file not found: {src}"}
         try:
-            shutil.copy2(src, tmp)
-        except OSError as e:
-            return {"ok": False, "error": str(e)}
+            # Copy-first, then validate + ingest. Never parse the source path directly.
+            src = WOW_AUCTIONATOR_SOURCE
+            dst = WORKSPACE_AUCTIONATOR_COPY
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            tmp = dst.with_suffix(dst.suffix + ".tmp")
 
-        # Basic validation: require scan time + at least one posting.
-        try:
-            # Lazy import to avoid circular
-            from .ingest import AuctionatorIngestor
+            if not src.exists():
+                return {"ok": False, "error": f"Source file not found: {src}"}
 
-            # We only need validation here; the running ingestor will ingest the final dst.
-            # Validation logic lives on AuctionatorIngestor.
-            dummy = AuctionatorIngestor(history_store=history_store)
-            dummy.parse_and_validate(tmp)
-        except Exception as e:
             try:
-                tmp.unlink(missing_ok=True)
-            except OSError:
-                pass
-            return {"ok": False, "error": str(e)}
+                shutil.copy2(src, tmp)
+            except OSError as e:
+                return {"ok": False, "error": str(e)}
 
-        try:
-            tmp.replace(dst)
-        except OSError as e:
-            return {"ok": False, "error": str(e)}
+            # Basic validation: require scan time + at least one posting.
+            try:
+                from .ingest import AuctionatorIngestor
 
-        # Ingest into the running state/history
-        try:
-            # We can reuse the same parse logic by reloading from dst and appending history.
-            # Note: create_app currently receives `state` by reference; `AuctionatorIngestor` swaps its own
-            # state object, so this UI will show updated history but may not see state updates. We'll keep
-            # the UI responsive by relying on history + recent list derived from current state.
-            # In the next iteration, we will refactor to share a single ingestor instance.
-            from .history import JsonlHistoryStore
-            from .ingest import AuctionatorIngestor
+                dummy = AuctionatorIngestor(history_store=history_store)
+                dummy.parse_and_validate(tmp)
+            except Exception as e:
+                try:
+                    tmp.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                return {"ok": False, "error": str(e)}
 
-            ing = AuctionatorIngestor(history_store=history_store)
-            ing.ingest_file(dst)
-            state.last_browse_scan_time = ing.state.last_browse_scan_time
-            state.postings_by_item_id = ing.state.postings_by_item_id
+            try:
+                tmp.replace(dst)
+            except OSError as e:
+                return {"ok": False, "error": str(e)}
+
+            # Ingest into the running state/history
+            try:
+                from .ingest import AuctionatorIngestor
+
+                ing = AuctionatorIngestor(history_store=history_store)
+                ing.ingest_file(dst)
+                state.last_browse_scan_time = ing.state.last_browse_scan_time
+                state.postings_by_item_id = ing.state.postings_by_item_id
+            except Exception as e:
+                return {"ok": False, "error": str(e)}
+
+            return {"ok": True, "copied_to": str(dst), "source": str(src)}
         except Exception as e:
             return {"ok": False, "error": str(e)}
-
-        return {"ok": True, "copied_to": str(dst)}
 
     @app.get("/api/suggest")
     def suggest(q: str = ""):

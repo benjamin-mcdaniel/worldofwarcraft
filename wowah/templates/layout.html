@@ -277,9 +277,29 @@
           btn.textContent = 'Importing + updating...';
           try {
             const resp = await fetch('/api/import', { method: 'POST' });
-            const data = await resp.json();
-            if (!data.ok) {
-              alert('Import failed: ' + (data.error || 'unknown error'));
+            if (resp.status === 404) {
+              let ping = '';
+              try {
+                const pr = await fetch('/api/ping');
+                const pj = await pr.json();
+                ping = JSON.stringify(pj);
+              } catch (e) {
+                ping = 'ping failed';
+              }
+              alert('Import failed: Not Found (404). You are likely connected to an older server instance or the wrong port.\n\nTry: stop all running wowah servers and restart.\nThen refresh this page.\n\n/api/ping: ' + ping);
+              return;
+            }
+            let data = null;
+            try {
+              data = await resp.json();
+            } catch (e) {
+              const text = await resp.text();
+              alert('Import failed: server returned non-JSON response\n\n' + text.slice(0, 400));
+              return;
+            }
+            if (!data || data.ok !== true) {
+              const msg = (data && (data.error || data.detail)) || 'unknown error';
+              alert('Import failed: ' + msg);
             } else {
               // refresh to show new recent items / scan time
               window.location.reload();
