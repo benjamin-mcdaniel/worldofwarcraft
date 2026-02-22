@@ -16,6 +16,24 @@
     </div>
 
     <div class="card">
+      <div class="card__title">Item info</div>
+      <div style="display:flex; gap:12px; align-items:flex-start;">
+        {% if meta and meta.icon %}
+          <img src="{{ item_icon_url(meta.icon) }}" width="44" height="44" style="border-radius: 10px; border: 1px solid rgba(255,255,255,0.10);" />
+        {% else %}
+          <div style="width:44px; height:44px; border-radius:10px; border:1px solid rgba(255,255,255,0.10); background: rgba(255,255,255,0.04);"></div>
+        {% endif %}
+        <div>
+          <div style="font-weight: 800;">{{ (meta.name if meta else None) or 'Unknown item' }}</div>
+          <div class="muted" style="font-size: 12px;">quality: {{ meta.quality if meta else '' }}</div>
+          {% if meta and meta.tooltip %}
+            <div class="muted" style="margin-top: 8px; font-size: 12px; line-height: 1.35;">{{ meta.tooltip|safe }}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="card__title">History</div>
       <div class="muted">Append-only file history from ingested posting history.</div>
       <div class="table">

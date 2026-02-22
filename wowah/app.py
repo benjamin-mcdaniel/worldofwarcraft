@@ -2,14 +2,30 @@ from __future__ import annotations
 
 import argparse
 import os
+import socket
 from pathlib import Path
 
 import uvicorn
 
+from .config import WORKSPACE_AUCTIONATOR_COPY, WOW_AUCTIONATOR_SOURCE
 from .history import JsonlHistoryStore
 from .ingest import AuctionatorIngestor
 from .watcher import CopyThenIngestWatcher
 from .web import create_app
+
+
+def _port_available(host: str, port: int) -> bool:
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.bind((host, port))
+        return True
+    except OSError:
+        return False
+    finally:
+        try:
+            s.close()
+        except OSError:
+            pass
 
 
 def main() -> None:
@@ -23,7 +39,7 @@ def main() -> None:
     parser.add_argument(
         "--copy-dest",
         required=False,
-        default=str(Path("data") / "live" / "Auctionator.lua"),
+        default=str(WORKSPACE_AUCTIONATOR_COPY),
         help="Where to copy Auctionator.lua into the workspace",
     )
     parser.add_argument(
@@ -37,7 +53,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    source_path = Path(args.source) if args.source else None
+    source_path = Path(args.source) if args.source else WOW_AUCTIONATOR_SOURCE
     copy_dest_path = Path(args.copy_dest)
     history_path = Path(args.history)
 
@@ -57,6 +73,13 @@ def main() -> None:
         watcher.start()
         # initial ingest attempt
         watcher.copy_then_ingest()
+
+    if not _port_available(args.host, int(args.port)):
+        alt = int(args.port) + 1
+        raise SystemExit(
+            f"Port {args.port} is already in use on {args.host}. "
+            f"Stop the other server or re-run with --port {alt}."
+        )
 
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 

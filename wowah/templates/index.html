@@ -39,13 +39,24 @@
       <div class="muted">Click an item to view its history. This list is preloaded so you don't need to know the right id.</div>
       <div class="table">
         <div class="table__head">
-          <div>Item ID</div>
+          <div>Item</div>
           <div>Latest unit</div>
           <div>Last time</div>
         </div>
         {% for item_id in recent %}
+          {% set m = item_meta(item_id) %}
           <a class="table__row" href="/item/{{ item_id }}">
-            <div class="mono">{{ item_id }}</div>
+            <div style="display:flex; gap:10px; align-items:center;">
+              {% if m and m.icon %}
+                <img src="{{ item_icon_url(m.icon) }}" width="28" height="28" style="border-radius: 6px; border: 1px solid rgba(255,255,255,0.10);" />
+              {% else %}
+                <div style="width:28px; height:28px; border-radius:6px; border:1px solid rgba(255,255,255,0.10); background: rgba(255,255,255,0.04);"></div>
+              {% endif %}
+              <div>
+                <div class="mono">{{ item_id }}</div>
+                <div class="muted" style="font-size:12px;">{{ (m.name if m else None) or '' }}</div>
+              </div>
+            </div>
             <div class="mono">{{ state_latest(item_id) }}</div>
             <div class="mono">{{ state_last_time(item_id) }}</div>
           </a>

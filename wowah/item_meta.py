@@ -81,6 +81,56 @@ class ItemMetaStore:
         self._save()
         return fetched
 
+    def search_cached(self, query: str, limit: int = 20) -> list[ItemMeta]:
+        self._load()
+        q = (query or "").strip().lower()
+        if not q:
+            return []
+
+        out: list[ItemMeta] = []
+        # First: exact/prefix item id matches
+        if q.isdigit():
+            for key, rec in self._cache.items():
+                if key.startswith(q):
+                    try:
+                        item_id = int(key)
+                    except ValueError:
+                        continue
+                    out.append(
+                        ItemMeta(
+                            item_id=item_id,
+                            name=rec.get("name"),
+                            icon=rec.get("icon"),
+                            quality=rec.get("quality"),
+                            tooltip=rec.get("tooltip"),
+                            fetched_at=rec.get("fetched_at"),
+                        )
+                    )
+                    if len(out) >= limit:
+                        return out
+
+        # Second: name contains matches
+        for key, rec in self._cache.items():
+            name = (rec.get("name") or "").lower()
+            if q in name:
+                try:
+                    item_id = int(key)
+                except ValueError:
+                    continue
+                out.append(
+                    ItemMeta(
+                        item_id=item_id,
+                        name=rec.get("name"),
+                        icon=rec.get("icon"),
+                        quality=rec.get("quality"),
+                        tooltip=rec.get("tooltip"),
+                        fetched_at=rec.get("fetched_at"),
+                    )
+                )
+                if len(out) >= limit:
+                    break
+        return out
+
     def _fetch_from_wowhead(self, item_id: int) -> Optional[ItemMeta]:
         # Public tooltip endpoint (no API key). If it stops working, the app still functions without metadata.
         url = f"https://www.wowhead.com/tooltip/item/{item_id}?dataEnv=live&locale=0"
