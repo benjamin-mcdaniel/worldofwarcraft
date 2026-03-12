@@ -1,0 +1,50 @@
+{
+  "name": "worldofwarcraft-market-tracker",
+  "frontend": {
+    "framework": "Astro",
+    "goals": {
+      "features": [
+        "Static site generation",
+        "Market history display",
+        "Trending data visualization"
+      ],
+      "security": [
+        "Cache control for static assets",
+        "HTTPS enforced globally"
+      ],
+      "update": [
+        "Deploy via GitHub Actions",
+        "Modular components for easy updates"
+      ]
+    }
+  },
+  "backend": {
+    "page_worker": {
+      "description": "Cloudflare Worker for serving SSG frontend",
+      "routes": ["*your-domain.com/*"]
+    },
+    "data_processor_worker": {
+      "description": "Cloudflare Worker to process and upload market data",
+      "routes": ["*your-domain.com/api/*"]
+    },
+    "storage": {
+      "type": "Cloudflare R2",
+      "description": "Bucket for processed data storage",
+      "security": ["Access control", "Encryption at rest"]
+    },
+    "database": {
+      "type": "PostgreSQL",
+      "description": "User authentication and login information",
+      "security": ["Encrypted user passwords", "Access control management"]
+    }
+  },
+  "third_party": {
+    "images": null,
+    "item_metadata": null
+  },
+  "success_criteria": [
+    "Market history data available",
+    "Trending data displayed",
+    "Custom search functionality based on game mechanics"
+  ]
+}
