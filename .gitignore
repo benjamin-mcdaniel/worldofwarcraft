@@ -1,7 +1,0 @@
-history/
-data/live/
-__pycache__/
-*.pyc
-
-# Local override containing personal WoW account path
-wowah/config_local.py
