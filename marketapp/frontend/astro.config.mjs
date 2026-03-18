@@ -10,5 +10,11 @@ export default defineConfig({
     react(),
     tailwind(),
   ],
-
+  vite: {
+    define: {
+      'import.meta.env.PUBLIC_API_BASE': JSON.stringify(
+        'https://wow-market-api.benjamin-f-mcdaniel.workers.dev/api'
+      ),
+    },
+  },
 });

@@ -4,7 +4,8 @@ import type {
   SearchParams, Region,
 } from './types';
 
-const API_BASE = import.meta.env.PUBLIC_API_BASE ?? '/api';
+const API_BASE = import.meta.env.PUBLIC_API_BASE
+  ?? 'https://wow-market-api.benjamin-f-mcdaniel.workers.dev/api';
 
 function getToken(): string | null {
   if (typeof localStorage === 'undefined') return null;

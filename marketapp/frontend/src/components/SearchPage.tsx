@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { PricedItem, SearchParams } from '../lib/types';
 import { QUALITY_COLORS } from '../lib/types';
-import { search } from '../lib/api';
+import { search, realms as realmsApi } from '../lib/api';
 import { ItemIcon } from './shared/ItemIcon';
 import { formatGold } from '../lib/money';
 
@@ -64,6 +64,11 @@ function PriceChart({ history }: { history?: [number, number][] }) {
 }
 
 export default function SearchPage() {
+  const [region, setRegion] = useState<string>(
+    () => (typeof localStorage !== 'undefined' ? localStorage.getItem('wow_market_region') : null) ?? 'us'
+  );
+  const [realmList, setRealmList] = useState<Array<{ id: number; name: string }>>([]);
+  const [realmsLoading, setRealmsLoading] = useState(true);
   const [realmId, setRealmId] = useState(0);
   const [activeClass, setActiveClass] = useState<number | undefined>(undefined);
   const [query, setQuery] = useState('');
@@ -75,26 +80,55 @@ export default function SearchPage() {
   const [minLevel, setMinLevel] = useState<number | undefined>();
   const [maxLevel, setMaxLevel] = useState<number | undefined>();
 
+  // Keep a ref so executeSearch always reads latest realmId without stale closure
+  const realmIdRef = useRef(0);
+  realmIdRef.current = realmId;
+  const queryRef = useRef('');
+  queryRef.current = query;
+  const activeClassRef = useRef<number | undefined>(undefined);
+  activeClassRef.current = activeClass;
+
+  // Load realm list whenever region changes
   useEffect(() => {
-    const saved = localStorage.getItem('wow_market_realm');
-    if (saved) setRealmId(Number(saved));
+    setRealmsLoading(true);
+    setRealmList([]);
+    setRealmId(0);
+    setResults([]);
+
+    realmsApi.list()
+      .then((all: any[]) => {
+        const filtered = (all as any[]).filter((r: any) => r.region === region);
+        setRealmList(filtered);
+        if (filtered.length === 0) { setRealmsLoading(false); return; }
+        const saved = localStorage.getItem(`wow_market_realm_${region}`);
+        const match = filtered.find((r: any) => String(r.id) === String(saved));
+        const pick = match ?? filtered[0];
+        localStorage.setItem(`wow_market_realm_${region}`, String(pick.id));
+        setRealmId(pick.id);
+        setRealmsLoading(false);
+      })
+      .catch(() => setRealmsLoading(false));
+  }, [region]);
+
+  // Listen to regionChanged from the top-bar selector
+  useEffect(() => {
     const handler = (e: Event) => {
-      const d = (e as CustomEvent).detail;
-      setRealmId(Number(typeof d === 'object' ? d.realmId : d));
+      const r = (e as CustomEvent).detail?.region;
+      if (r) { setRegion(r); setActiveClass(undefined); setQuery(''); }
     };
-    window.addEventListener('realmChanged', handler);
-    return () => window.removeEventListener('realmChanged', handler);
+    window.addEventListener('regionChanged', handler);
+    return () => window.removeEventListener('regionChanged', handler);
   }, []);
 
   async function executeSearch(overrides: Partial<SearchParams> = {}) {
-    const rId = overrides.realm ?? realmId;
+    const rId = overrides.realm ?? realmIdRef.current;
     if (!rId) return;
     setLoading(true);
     try {
       const params: SearchParams = {
         realm: rId,
-        q: query || undefined,
-        class: activeClass,
+        q: ('q' in overrides ? overrides.q : queryRef.current) || undefined,
+        class: 'class' in overrides ? overrides.class : activeClassRef.current,
         limit: 200,
         minQuality: minQuality || undefined,
         minLevel,
@@ -102,7 +136,7 @@ export default function SearchPage() {
         ...overrides,
       };
       const data = await search.items(params);
-      setResults(data);
+      setResults(Array.isArray(data) ? data : []);
     } catch {
       setResults([]);
     } finally {
@@ -110,8 +144,9 @@ export default function SearchPage() {
     }
   }
 
+  // Auto-search when realm is first selected
   useEffect(() => {
-    if (realmId) executeSearch({ realm: realmId });
+    if (realmId) executeSearch({ realm: realmId, class: activeClassRef.current });
   }, [realmId]);
 
   function selectCategory(cls: number | undefined) {
@@ -147,6 +182,20 @@ export default function SearchPage() {
 
         {/* Search bar */}
         <div className="bg-bg2 border-b border-border px-4 py-2.5 flex gap-2 items-center">
+          <select
+            value={realmId}
+            onChange={e => {
+              const id = Number(e.target.value);
+              setRealmId(id);
+              localStorage.setItem(`wow_market_realm_${region}`, String(id));
+            }}
+            className="bg-bg3 border border-border text-sm text-gray-300 px-2 py-2 rounded shrink-0 max-w-[180px]"
+          >
+            {realmList.length === 0
+              ? <option value={0}>Loading realms…</option>
+              : realmList.map(r => <option key={r.id} value={r.id}>{r.name}</option>)
+            }
+          </select>
           <div className="flex-1 relative">
             <input type="text" placeholder="Search item name…" value={query}
               onChange={e => setQuery(e.target.value)}
@@ -185,14 +234,26 @@ export default function SearchPage() {
 
         {/* Results */}
         <div className="flex-1 overflow-y-auto">
-          {!realmId && (
+          {realmsLoading && (
             <div className="p-12 text-center text-gray-500">
-              <div className="text-3xl mb-3">🌐</div>
-              <div>Select a realm in the top bar to load items</div>
+              <div className="text-2xl mb-3 animate-pulse">⚙</div>
+              <div>Loading realms…</div>
             </div>
           )}
-          {realmId && loading && <div className="p-12 text-center text-gray-500">Loading…</div>}
-          {realmId && !loading && results.length === 0 && <div className="p-12 text-center text-gray-500">No items found</div>}
+          {!realmsLoading && !realmId && (
+            <div className="p-12 text-center text-gray-500">
+              <div className="text-3xl mb-3">🌐</div>
+              <div>No realms found for {region.toUpperCase()}. Try a different region.</div>
+            </div>
+          )}
+          {!realmsLoading && realmId && loading && <div className="p-12 text-center text-gray-500">Loading…</div>}
+          {!realmsLoading && realmId && !loading && results.length === 0 && (
+            <div className="p-12 text-center text-gray-500">
+              <div className="text-2xl mb-2">📭</div>
+              <div>No auction house data yet for this realm.</div>
+              <div className="text-xs mt-1 text-gray-600">Try selecting a category to browse the full item catalog.</div>
+            </div>
+          )}
           {realmId && results.length > 0 && (
             <>
               <div className="px-4 py-2 text-[11px] text-gray-500 border-b border-border bg-bg2 sticky top-0 z-10">

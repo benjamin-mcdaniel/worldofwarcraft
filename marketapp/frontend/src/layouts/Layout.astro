@@ -48,6 +48,7 @@ const { title = 'WoW Market', requireAuth = true } = Astro.props;
       background: var(--bg3); border: 1px solid var(--border);
       color: #d4c5a0; font-size: 12px; padding: 4px 8px;
       border-radius: 5px; outline: none; cursor: pointer;
+      color-scheme: dark;
     }
     .top-login { font-size: 12px; color: var(--blue); padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); }
     .top-login:hover { border-color: var(--blue); }
@@ -107,8 +108,11 @@ const { title = 'WoW Market', requireAuth = true } = Astro.props;
       YARP!
     </div>
     <div class="top-bar-right">
-      <select class="top-realm-select" id="realm-select">
-        <option value="">— Realm —</option>
+      <select class="top-realm-select" id="region-select">
+        <option value="us">US</option>
+        <option value="eu">EU</option>
+        <option value="tw">TW</option>
+        <option value="kr">KR</option>
       </select>
       <a href="/login" class="top-login" id="nav-login">Login</a>
       <span class="top-user" id="nav-user" style="display:none;"></span>
@@ -185,52 +189,17 @@ const { title = 'WoW Market', requireAuth = true } = Astro.props;
       if (loginEl) loginEl.style.display = 'none';
     }
 
-    // Realm selector — global, persists to localStorage
-    const API_BASE = import.meta.env.PUBLIC_API_BASE || '/api';
-    const token = localStorage.getItem('wow_market_token');
-    const savedRealm = localStorage.getItem('wow_market_realm');
-
-    (async function loadRealms() {
-      try {
-        const res = await fetch(`${API_BASE}/realms`);
-        if (!res.ok) return;
-        const data = await res.json();
-        const list = Array.isArray(data) ? data : (data.realms ?? []);
-        const sel = document.getElementById('realm-select');
-        if (!sel || !list.length) return;
-        const groups = {};
-        for (const r of list) {
-          const key = (r.region ?? 'US').toUpperCase();
-          if (!groups[key]) groups[key] = [];
-          groups[key].push(r);
-        }
-        for (const [region, realms] of Object.entries(groups)) {
-          const og = document.createElement('optgroup');
-          og.label = region;
-          for (const r of realms) {
-            const opt = document.createElement('option');
-            opt.value = r.id;
-            opt.textContent = r.canonical?.name ?? r.name ?? r.id;
-            if (savedRealm && String(savedRealm) === String(r.id)) opt.selected = true;
-            og.appendChild(opt);
-          }
-          sel.appendChild(og);
-        }
-        // Restore saved realm selection
-        if (savedRealm) {
-          const saved = list.find(r => String(r.id) === String(savedRealm));
-          if (saved) localStorage.setItem('wow_market_region', saved.region);
-        }
-        sel.addEventListener('change', (e) => {
-          const rid = e.target.value;
-          localStorage.setItem('wow_market_realm', rid);
-          const r = list.find(x => String(x.id) === String(rid));
-          const region = r?.region ?? 'us';
-          localStorage.setItem('wow_market_region', region);
-          window.dispatchEvent(new CustomEvent('realmChanged', { detail: { realmId: rid, region } }));
-        });
-      } catch {}
-    })();
+    // Region selector — persists to localStorage, drives all market pages
+    const savedRegion = localStorage.getItem('wow_market_region') ?? 'us';
+    const regionSel = document.getElementById('region-select');
+    if (regionSel) {
+      regionSel.value = savedRegion;
+      regionSel.addEventListener('change', (e) => {
+        const region = e.target.value;
+        localStorage.setItem('wow_market_region', region);
+        window.dispatchEvent(new CustomEvent('regionChanged', { detail: { region } }));
+      });
+    }
 
     // Highlight active nav item
     const path = window.location.pathname.replace(/\/$/, '') || '/';

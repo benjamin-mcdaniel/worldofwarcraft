@@ -27,12 +27,11 @@ export default function DealsPage() {
 
   useEffect(() => {
     const handler = (e: Event) => {
-      const d = (e as CustomEvent).detail;
-      const newRegion = typeof d === 'object' ? d.region : (localStorage.getItem('wow_market_region') ?? 'us');
-      setRegion(newRegion);
+      const r = (e as CustomEvent).detail?.region;
+      if (r) setRegion(r);
     };
-    window.addEventListener('realmChanged', handler);
-    return () => window.removeEventListener('realmChanged', handler);
+    window.addEventListener('regionChanged', handler);
+    return () => window.removeEventListener('regionChanged', handler);
   }, []);
 
   useEffect(() => { load(region); }, [region]);
