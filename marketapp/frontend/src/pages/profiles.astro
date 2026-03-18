@@ -1,0 +1,9 @@
+---
+import Layout from '../layouts/Layout.astro';
+import ProfilesPage from '../components/ProfilesPage';
+---
+<Layout title="Market Profiles">
+  <body data-page="profiles">
+    <ProfilesPage client:load />
+  </body>
+</Layout>

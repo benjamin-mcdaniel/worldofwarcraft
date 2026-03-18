@@ -1,0 +1,111 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Login" requireAuth={false}>
+  <div class="login-wrapper">
+    <div class="login-card">
+      <div class="logo-area">
+        <div class="logo-icon">⚔</div>
+        <div class="logo-title">WoW Market</div>
+        <div class="logo-sub">Private Market Intelligence</div>
+      </div>
+
+      <div id="error-msg" class="error-msg" style="display:none;"></div>
+
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" type="text" autocomplete="username" placeholder="Enter username" />
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" type="password" autocomplete="current-password" placeholder="Enter password" />
+      </div>
+      <button id="login-btn" class="btn-login">Sign In</button>
+      <div class="login-note">Private access only. Contact admin for access.</div>
+    </div>
+  </div>
+</Layout>
+
+<style>
+  .login-wrapper {
+    display: flex; align-items: center; justify-content: center;
+    min-height: calc(100vh - 48px);
+  }
+  .login-card {
+    width: 360px; background: #16181c; border: 1px solid #2e3040;
+    border-radius: 10px; padding: 36px 32px;
+  }
+  .logo-area { text-align: center; margin-bottom: 28px; }
+  .logo-icon { font-size: 36px; margin-bottom: 8px; }
+  .logo-title { font-size: 22px; font-weight: 700; color: #f0c060; }
+  .logo-sub { font-size: 12px; color: #8a8fa8; margin-top: 4px; }
+  .field { margin-bottom: 16px; }
+  .field label { font-size: 12px; color: #8a8fa8; display: block; margin-bottom: 5px; }
+  .field input {
+    width: 100%; background: #1e2028; border: 1px solid #2e3040;
+    color: #d4c5a0; padding: 9px 12px; border-radius: 5px; font-size: 14px;
+    outline: none; transition: border-color 0.15s;
+  }
+  .field input:focus { border-color: #4a90d9; }
+  .btn-login {
+    width: 100%; background: #f0c060; color: #1a1209; border: none;
+    padding: 11px; border-radius: 5px; font-size: 14px; font-weight: 700;
+    cursor: pointer; transition: opacity 0.15s; margin-top: 4px;
+  }
+  .btn-login:hover { opacity: 0.9; }
+  .btn-login:disabled { opacity: 0.5; cursor: not-allowed; }
+  .login-note { font-size: 11px; color: #555; text-align: center; margin-top: 12px; }
+  .error-msg {
+    background: #2a0d0d; border: 1px solid #5a1a1a; color: #cf4e4e;
+    padding: 8px 12px; border-radius: 5px; font-size: 12px; margin-bottom: 16px;
+  }
+</style>
+
+<script>
+  const API_BASE = import.meta.env.PUBLIC_API_BASE || '/api';
+
+  document.getElementById('login-btn')?.addEventListener('click', async () => {
+    const username = (document.getElementById('username') as HTMLInputElement).value.trim();
+    const password = (document.getElementById('password') as HTMLInputElement).value;
+    const btn = document.getElementById('login-btn') as HTMLButtonElement;
+    const errEl = document.getElementById('error-msg') as HTMLElement;
+
+    if (!username || !password) {
+      errEl.textContent = 'Please enter username and password.';
+      errEl.style.display = '';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Signing in…';
+    errEl.style.display = 'none';
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Login failed');
+
+      localStorage.setItem('wow_market_token', data.token);
+      localStorage.setItem('wow_market_user', JSON.stringify({
+        token: data.token,
+        username,
+        expiresAt: data.expiresAt,
+      }));
+
+      window.location.href = '/dashboard';
+    } catch (err: any) {
+      errEl.textContent = err.message ?? 'Login failed. Please try again.';
+      errEl.style.display = '';
+      btn.disabled = false;
+      btn.textContent = 'Sign In';
+    }
+  });
+
+  document.getElementById('password')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('login-btn')?.click();
+  });
+</script>

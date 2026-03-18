@@ -1,0 +1,25 @@
+name = "wow-market-api"
+main = "src/index.ts"
+compatibility_date = "2024-03-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "production"
+
+# Bind D1 database for user/profile data
+[[d1_databases]]
+binding = "DB"
+database_name = "wow-market-db"
+database_id = "5bdafa73-fdf0-4254-8387-e096c61544ce"
+
+# Bind R2 bucket for market data blobs
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "wow-market-data"
+
+# Secrets (set via: wrangler secret put JWT_SECRET)
+# JWT_SECRET
+
+[dev]
+port = 8787
+local_protocol = "http"

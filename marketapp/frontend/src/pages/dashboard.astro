@@ -1,0 +1,7 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Dashboard from '../components/Dashboard';
+---
+<Layout title="Dashboard" requireAuth={false}>
+  <Dashboard client:load />
+</Layout>

@@ -1,0 +1,257 @@
+---
+interface Props {
+  title?: string;
+  requireAuth?: boolean;
+}
+const { title = 'WoW Market', requireAuth = true } = Astro.props;
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{title} — WoW Market</title>
+  <link rel="preconnect" href="https://wow.zamimg.com" />
+  <style>
+    :root {
+      --bg: #0d0d0f;
+      --bg2: #16181c;
+      --bg3: #1e2028;
+      --border: #2e3040;
+      --gold: #f0c060;
+      --blue: #4a90d9;
+      --sidebar-w: 200px;
+      --topbar-h: 44px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg); color: #d4c5a0; min-height: 100vh; font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: var(--bg2); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    a { color: inherit; text-decoration: none; }
+
+    /* Top bar */
+    .top-bar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+      height: var(--topbar-h);
+      background: #09090b; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; padding: 0 16px; gap: 12px;
+    }
+    .top-logo {
+      width: var(--sidebar-w); flex-shrink: 0;
+      font-size: 16px; font-weight: 900; color: var(--gold);
+      letter-spacing: 0.06em; display: flex; align-items: center; gap: 7px;
+    }
+    .top-logo .sword { font-size: 18px; }
+    .top-bar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+    .top-realm-select {
+      background: var(--bg3); border: 1px solid var(--border);
+      color: #d4c5a0; font-size: 12px; padding: 4px 8px;
+      border-radius: 5px; outline: none; cursor: pointer;
+    }
+    .top-login { font-size: 12px; color: var(--blue); padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); }
+    .top-login:hover { border-color: var(--blue); }
+    .top-user { font-size: 12px; color: var(--blue); }
+    .top-signout {
+      font-size: 12px; color: #666; cursor: pointer;
+      padding: 4px 8px; border-radius: 4px; transition: color 0.15s;
+    }
+    .top-signout:hover { color: #cf4e4e; }
+
+    /* Sidebar */
+    .sidebar {
+      position: fixed; top: var(--topbar-h); left: 0; bottom: 0;
+      width: var(--sidebar-w); z-index: 100;
+      background: #0b0b0e; border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      padding: 12px 0; overflow-y: auto;
+    }
+    .nav-section { margin-bottom: 4px; }
+    .nav-section-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+      color: #444; text-transform: uppercase;
+      padding: 10px 16px 4px;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 9px;
+      padding: 7px 16px; font-size: 13px; color: #8a8fa8;
+      cursor: pointer; transition: all 0.12s; border-radius: 0;
+      position: relative;
+    }
+    .nav-item:hover { background: var(--bg3); color: #c8b88a; }
+    .nav-item.active {
+      color: var(--gold);
+      background: linear-gradient(90deg, rgba(240,192,96,0.08) 0%, transparent 100%);
+    }
+    .nav-item.active::before {
+      content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+      width: 3px; background: var(--gold); border-radius: 0 2px 2px 0;
+    }
+    .nav-icon { font-size: 15px; width: 18px; text-align: center; flex-shrink: 0; }
+    .nav-divider { border: none; border-top: 1px solid var(--border); margin: 8px 16px; }
+    .sidebar-bottom { margin-top: auto; padding: 12px 0; border-top: 1px solid var(--border); }
+
+    /* Main content */
+    .main-content {
+      margin-left: var(--sidebar-w);
+      padding-top: var(--topbar-h);
+      min-height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <!-- Top bar -->
+  <header class="top-bar">
+    <div class="top-logo">
+      <span class="sword">&#9876;</span>
+      YARP!
+    </div>
+    <div class="top-bar-right">
+      <select class="top-realm-select" id="realm-select">
+        <option value="">— Realm —</option>
+      </select>
+      <a href="/login" class="top-login" id="nav-login">Login</a>
+      <span class="top-user" id="nav-user" style="display:none;"></span>
+      <span class="top-signout" id="nav-logout" style="display:none;">Sign Out</span>
+    </div>
+  </header>
+
+  <!-- Left sidebar -->
+  <nav class="sidebar">
+    <div class="nav-section">
+      <div class="nav-section-label">Overview</div>
+      <a href="/dashboard" class="nav-item" data-page="dashboard">
+        <span class="nav-icon">&#127968;</span> Dashboard
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-label">Market</div>
+      <a href="/search" class="nav-item" data-page="search">
+        <span class="nav-icon">&#128269;</span> Search
+      </a>
+      <a href="/deals" class="nav-item" data-page="deals">
+        <span class="nav-icon">&#9889;</span> Deals
+      </a>
+      <a href="/favorites" class="nav-item" data-page="favorites">
+        <span class="nav-icon">&#11088;</span> Favorites
+      </a>
+      <a href="/profiles" class="nav-item" data-page="profiles">
+        <span class="nav-icon">&#128203;</span> Profiles
+      </a>
+    </div>
+
+
+    <div class="sidebar-bottom">
+      <div class="nav-item" id="sidebar-logout" style="display:none; color:#666;">
+        <span class="nav-icon">&#128682;</span> Sign Out
+      </div>
+    </div>
+  </nav>
+
+  <!-- Page content -->
+  <main class="main-content">
+    <slot />
+  </main>
+
+  <script define:vars={{ requireAuth }}>
+    const userRaw = localStorage.getItem('wow_market_user');
+    let user = null;
+    try { user = userRaw ? JSON.parse(userRaw) : null; } catch {}
+
+    if (requireAuth && (!user || user.expiresAt < Date.now())) {
+      window.location.href = '/login';
+    }
+
+    function doLogout(e) {
+      e.preventDefault();
+      localStorage.removeItem('wow_market_token');
+      localStorage.removeItem('wow_market_user');
+      localStorage.removeItem('wow_market_realm');
+      window.location.href = '/login';
+    }
+
+    if (user && user.expiresAt > Date.now()) {
+      const el = document.getElementById('nav-user');
+      if (el) { el.textContent = user.username; el.style.display = ''; }
+
+      const lo1 = document.getElementById('nav-logout');
+      if (lo1) { lo1.style.display = ''; lo1.addEventListener('click', doLogout); }
+
+      const lo2 = document.getElementById('sidebar-logout');
+      if (lo2) { lo2.style.display = ''; lo2.addEventListener('click', doLogout); }
+
+      const loginEl = document.getElementById('nav-login');
+      if (loginEl) loginEl.style.display = 'none';
+    }
+
+    // Realm selector — global, persists to localStorage
+    const API_BASE = import.meta.env.PUBLIC_API_BASE || '/api';
+    const token = localStorage.getItem('wow_market_token');
+    const savedRealm = localStorage.getItem('wow_market_realm');
+
+    (async function loadRealms() {
+      try {
+        const res = await fetch(`${API_BASE}/realms`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : (data.realms ?? []);
+        const sel = document.getElementById('realm-select');
+        if (!sel || !list.length) return;
+        const groups = {};
+        for (const r of list) {
+          const key = (r.region ?? 'US').toUpperCase();
+          if (!groups[key]) groups[key] = [];
+          groups[key].push(r);
+        }
+        for (const [region, realms] of Object.entries(groups)) {
+          const og = document.createElement('optgroup');
+          og.label = region;
+          for (const r of realms) {
+            const opt = document.createElement('option');
+            opt.value = r.id;
+            opt.textContent = r.canonical?.name ?? r.name ?? r.id;
+            if (savedRealm && String(savedRealm) === String(r.id)) opt.selected = true;
+            og.appendChild(opt);
+          }
+          sel.appendChild(og);
+        }
+        // Restore saved realm selection
+        if (savedRealm) {
+          const saved = list.find(r => String(r.id) === String(savedRealm));
+          if (saved) localStorage.setItem('wow_market_region', saved.region);
+        }
+        sel.addEventListener('change', (e) => {
+          const rid = e.target.value;
+          localStorage.setItem('wow_market_realm', rid);
+          const r = list.find(x => String(x.id) === String(rid));
+          const region = r?.region ?? 'us';
+          localStorage.setItem('wow_market_region', region);
+          window.dispatchEvent(new CustomEvent('realmChanged', { detail: { realmId: rid, region } }));
+        });
+      } catch {}
+    })();
+
+    // Highlight active nav item
+    const path = window.location.pathname.replace(/\/$/, '') || '/';
+    const pageMap = {
+      '/dashboard':  'dashboard',
+      '/search':     'search',
+      '/deals':      'deals',
+      '/favorites':  'favorites',
+      '/profiles':   'profiles',
+    };
+    const activePage = pageMap[path];
+    if (activePage) {
+      document.querySelectorAll(`.nav-item[data-page="${activePage}"]`).forEach(el => el.classList.add('active'));
+    }
+
+    // Highlight active category from URL
+    const params = new URLSearchParams(window.location.search);
+    const catClass = params.get('class');
+    if (path === '/search' && catClass) {
+      document.querySelectorAll(`.cat-item[data-cat="${catClass}"]`).forEach(el => el.classList.add('active'));
+    }
+  </script>
+</body>
+</html>
