@@ -65,6 +65,11 @@ export const deals = {
   list: (region: Region) => request<DealItem[]>(`/deals?region=${region}`),
 };
 
+// ─── Catalog ─────────────────────────────────────────────────────────────────
+export const catalog = {
+  item: (itemId: number) => request<ItemMeta>(`/catalog/${itemId}`),
+};
+
 // ─── Items ───────────────────────────────────────────────────────────────────
 export const items = {
   getState: (itemKey: string, realmId: number) =>

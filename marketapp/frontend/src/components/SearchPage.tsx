@@ -190,6 +190,7 @@ export default function SearchPage() {
               localStorage.setItem(`wow_market_realm_${region}`, String(id));
             }}
             className="bg-bg3 border border-border text-sm text-gray-300 px-2 py-2 rounded shrink-0 max-w-[180px]"
+            style={{ colorScheme: 'dark' }}
           >
             {realmList.length === 0
               ? <option value={0}>Loading realms…</option>
@@ -201,6 +202,7 @@ export default function SearchPage() {
               onChange={e => setQuery(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && executeSearch()}
               className="w-full bg-bg3 border border-border text-sm text-gray-200 px-3 py-2 rounded pr-8"
+              style={{ colorScheme: 'dark' }}
             />
             {query && <button onClick={() => { setQuery(''); executeSearch({ q: undefined }); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">✕</button>}
           </div>
@@ -214,15 +216,15 @@ export default function SearchPage() {
             <div className="flex gap-4 text-xs items-end flex-wrap">
               <div>
                 <label className="block text-gray-500 mb-1">ilvl Min</label>
-                <input type="number" placeholder="0" value={minLevel ?? ''} onChange={e => setMinLevel(e.target.value ? Number(e.target.value) : undefined)} className="w-20 bg-bg3 border border-border text-gray-200 px-2 py-1.5 rounded" />
+                <input type="number" placeholder="0" value={minLevel ?? ''} onChange={e => setMinLevel(e.target.value ? Number(e.target.value) : undefined)} className="w-20 bg-bg3 border border-border text-gray-200 px-2 py-1.5 rounded" style={{ colorScheme: 'dark' }} />
               </div>
               <div>
                 <label className="block text-gray-500 mb-1">ilvl Max</label>
-                <input type="number" placeholder="999" value={maxLevel ?? ''} onChange={e => setMaxLevel(e.target.value ? Number(e.target.value) : undefined)} className="w-20 bg-bg3 border border-border text-gray-200 px-2 py-1.5 rounded" />
+                <input type="number" placeholder="999" value={maxLevel ?? ''} onChange={e => setMaxLevel(e.target.value ? Number(e.target.value) : undefined)} className="w-20 bg-bg3 border border-border text-gray-200 px-2 py-1.5 rounded" style={{ colorScheme: 'dark' }} />
               </div>
               <div>
                 <label className="block text-gray-500 mb-1">Min Quality</label>
-                <select value={minQuality} onChange={e => setMinQuality(Number(e.target.value))} className="bg-bg3 border border-border text-gray-200 px-2 py-1.5 rounded">
+                <select value={minQuality} onChange={e => setMinQuality(Number(e.target.value))} className="bg-bg3 border border-border text-gray-200 px-2 py-1.5 rounded" style={{ colorScheme: 'dark' }}>
                   {['Any','Common','Uncommon','Rare','Epic','Legendary'].map((q,i) => <option key={i} value={i}>{q}</option>)}
                 </select>
               </div>
@@ -264,6 +266,7 @@ export default function SearchPage() {
                 <thead className="sticky top-[33px] bg-bg3 z-10">
                   <tr className="text-gray-500 font-medium border-b border-border">
                     <th className="text-left px-3 py-2.5">Item</th>
+                    <th className="text-right px-3 py-2.5 text-[10px]">ID</th>
                     <th className="text-right px-3 py-2.5">Price</th>
                     <th className="text-right px-3 py-2.5">Qty</th>
                     <th className="text-right px-3 py-2.5">Last Seen</th>
@@ -296,6 +299,9 @@ export default function SearchPage() {
                                 )}
                               </div>
                             </div>
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono text-[10px] text-gray-600">
+                            {meta?.id ?? item.itemKey.split(':')[0]}
                           </td>
                           <td className="px-3 py-2 text-right font-semibold text-wow-gold">
                             {item.price ? formatGold(item.price) : <span className="text-gray-600 font-normal">—</span>}
@@ -353,7 +359,16 @@ export default function SearchPage() {
                                     </div>
                                   )}
                                 </div>
-                                <div className="ml-auto self-end">
+                                <div className="ml-auto self-end flex flex-col gap-2 items-end">
+                                  <a
+                                    href={`https://www.wowhead.com/item=${(meta?.id ?? item.itemKey.split(':')[0])}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={e => e.stopPropagation()}
+                                    className="text-xs text-[#f7941d] hover:underline flex items-center gap-1"
+                                  >
+                                    WowHead ↗
+                                  </a>
                                   <a href={`/item/${encodeURIComponent(item.itemKey)}`} onClick={e => e.stopPropagation()} className="text-wow-blue text-xs hover:underline">
                                     Full detail →
                                   </a>

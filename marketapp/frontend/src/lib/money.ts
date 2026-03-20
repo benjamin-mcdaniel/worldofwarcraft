@@ -3,7 +3,7 @@ import type { Money } from './types';
 const COPPER_SILVER = 100;
 const COPPER_GOLD = 10000;
 
-export function formatGold(copper: Money): string {
+export function formatGold(copper: Money | null | undefined): string {
   if (!copper || copper <= 0) return '—';
   const gold = Math.floor(copper / COPPER_GOLD);
   const silver = Math.floor((copper % COPPER_GOLD) / COPPER_SILVER);
@@ -30,8 +30,8 @@ export function formatGoldShort(copper: Money): string {
   return `${copper}c`;
 }
 
-export function pctDiff(current: Money, reference: Money): number | null {
-  if (!reference || reference === 0) return null;
+export function pctDiff(current: Money | null | undefined, reference: Money | null | undefined): number | null {
+  if (!current || !reference || reference === 0) return null;
   return ((current - reference) / reference) * 100;
 }
 

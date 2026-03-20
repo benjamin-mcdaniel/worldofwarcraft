@@ -5,7 +5,7 @@ import ItemDetail from '../../components/ItemDetail';
 
 const { id } = Astro.params;
 ---
-<Layout title="Item Detail">
+<Layout title="Item Detail" requireAuth={true}>
   <body data-page="search">
     <ItemDetail client:load itemKey={id ?? ''} />
   </body>

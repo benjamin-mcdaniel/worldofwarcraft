@@ -21,20 +21,24 @@ export default function Dashboard() {
 
   async function loadData() {
     setLoading(true);
-    try {
-      const [dealsData, profilesData, snapshotsData] = await Promise.all([
-        deals.list(region),
-        profiles.list(),
-        realms.snapshots(),
-      ]);
-      setTopDeals(dealsData.slice(0, 8));
-      setSavedProfiles(profilesData);
-      setSnapshots(snapshotsData);
-    } catch (err) {
-      console.error('Dashboard load error:', err);
-    } finally {
-      setLoading(false);
+    const [dealsResult, profilesResult, snapshotsResult] = await Promise.allSettled([
+      deals.list(region),
+      profiles.list(),
+      realms.snapshots(),
+    ]);
+    if (dealsResult.status === 'fulfilled') {
+      const d = dealsResult.value;
+      setTopDeals(Array.isArray(d) ? d.slice(0, 8) : []);
     }
+    if (profilesResult.status === 'fulfilled') {
+      const p = profilesResult.value;
+      setSavedProfiles(Array.isArray(p) ? p : []);
+    }
+    if (snapshotsResult.status === 'fulfilled') {
+      const s = snapshotsResult.value;
+      setSnapshots(Array.isArray(s) ? s : []);
+    }
+    setLoading(false);
   }
 
   const statCards = [

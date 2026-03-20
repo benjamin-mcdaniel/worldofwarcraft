@@ -110,6 +110,7 @@ export default function DealsPage() {
             <thead>
               <tr style={{ borderBottom: '1px solid #2e3040', color: '#555', fontSize: 11, textAlign: 'left' }}>
                 <th style={{ padding: '6px 10px', fontWeight: 500 }}>Item</th>
+                <th style={{ padding: '6px 10px', fontWeight: 500, textAlign: 'right' }}>ID</th>
                 <th style={{ padding: '6px 10px', fontWeight: 500 }}>Deal Price</th>
                 <th style={{ padding: '6px 10px', fontWeight: 500 }}>Region Median</th>
                 <th style={{ padding: '6px 10px', fontWeight: 500 }}>% Below</th>
@@ -133,10 +134,10 @@ export default function DealsPage() {
                       {deal.item?.icon && (
                         <ItemIcon icon={deal.item.icon} quality={deal.item.quality ?? 1} size={28} />
                       )}
-                      <div>
-                        <div style={{ color: '#d4c5a0' }}>{deal.item?.name ?? deal.itemKey}</div>
-                        <div style={{ fontSize: 11, color: '#555' }}>{deal.itemKey}</div>
-                      </div>
+                      <span style={{ color: '#d4c5a0' }}>{deal.item?.name ?? deal.itemKey}</span>
+                    </td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontSize: 11, color: '#555' }}>
+                      {String(deal.itemKey ?? '').split(':')[0]}
                     </td>
                     <td style={{ padding: '8px 10px' }}><MoneyDisplay value={deal.price} /></td>
                     <td style={{ padding: '8px 10px', color: '#666' }}><MoneyDisplay value={deal.regionMedian ?? 0} /></td>

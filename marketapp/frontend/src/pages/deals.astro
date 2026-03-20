@@ -2,6 +2,6 @@
 import Layout from '../layouts/Layout.astro';
 import DealsPage from '../components/DealsPage';
 ---
-<Layout title="Deals" requireAuth={false}>
+<Layout title="Deals" requireAuth={true}>
   <DealsPage client:load />
 </Layout>

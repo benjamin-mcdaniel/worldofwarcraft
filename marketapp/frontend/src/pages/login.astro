@@ -62,7 +62,7 @@ import Layout from '../layouts/Layout.astro';
 </style>
 
 <script>
-  const API_BASE = import.meta.env.PUBLIC_API_BASE || '/api';
+  const API_BASE = import.meta.env.PUBLIC_API_BASE || 'https://wow-market-api.benjamin-f-mcdaniel.workers.dev/api';
 
   document.getElementById('login-btn')?.addEventListener('click', async () => {
     const username = (document.getElementById('username') as HTMLInputElement).value.trim();

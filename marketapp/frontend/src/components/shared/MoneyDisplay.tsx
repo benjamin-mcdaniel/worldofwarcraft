@@ -2,7 +2,7 @@ import type { Money } from '../../lib/types';
 import { formatGold, pctDiff, formatPct } from '../../lib/money';
 
 interface Props {
-  value: Money;
+  value: Money | null | undefined;
   className?: string;
 }
 export function MoneyDisplay({ value, className = '' }: Props) {
@@ -10,8 +10,8 @@ export function MoneyDisplay({ value, className = '' }: Props) {
 }
 
 interface DeltaProps {
-  current: Money;
-  reference: Money;
+  current: Money | null | undefined;
+  reference: Money | null | undefined;
   className?: string;
 }
 export function MedianDelta({ current, reference, className = '' }: DeltaProps) {

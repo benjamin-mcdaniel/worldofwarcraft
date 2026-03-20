@@ -101,6 +101,19 @@ const { title = 'WoW Market', requireAuth = true } = Astro.props;
   </style>
 </head>
 <body>
+  {requireAuth && (
+    <script is:inline>
+      (function() {
+        var raw = localStorage.getItem('wow_market_user');
+        var user = null;
+        try { user = raw ? JSON.parse(raw) : null; } catch(e) {}
+        if (!user || user.expiresAt < Date.now()) {
+          document.documentElement.style.visibility = 'hidden';
+          window.location.replace('/login');
+        }
+      })();
+    </script>
+  )}
   <!-- Top bar -->
   <header class="top-bar">
     <div class="top-logo">

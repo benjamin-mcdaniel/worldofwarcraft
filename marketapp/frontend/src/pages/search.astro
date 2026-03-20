@@ -2,6 +2,6 @@
 import Layout from '../layouts/Layout.astro';
 import SearchPage from '../components/SearchPage';
 ---
-<Layout title="Search" requireAuth={false}>
+<Layout title="Search" requireAuth={true}>
   <SearchPage client:load />
 </Layout>

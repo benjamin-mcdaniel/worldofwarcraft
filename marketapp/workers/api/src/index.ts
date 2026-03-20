@@ -253,6 +253,16 @@ route('GET', '/api/deals', false, async (req, env) => {
   return json(enriched);
 });
 
+// Item catalog lookup (public — no auth needed)
+route('GET', '/api/catalog/:itemId', false, async (_req, env, p) => {
+  const obj = await env.R2_BUCKET.get('static/items.json');
+  if (!obj) return err('Catalog not available', 503);
+  const catalog = await obj.json<Record<string, Record<string, unknown>>>();
+  const meta = catalog[p.itemId];
+  if (!meta) return err('Item not found', 404);
+  return json({ id: parseInt(p.itemId), ...meta });
+});
+
 // Item state
 route('GET', '/api/item/:itemKey/realm/:realmId', true, async (req, env, p) => {
   const obj = await env.R2_BUCKET.get(`realm/${p.realmId}/items/${encodeURIComponent(p.itemKey)}.json`);

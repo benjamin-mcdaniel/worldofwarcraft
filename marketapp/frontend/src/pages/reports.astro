@@ -2,7 +2,7 @@
 import Layout from '../layouts/Layout.astro';
 import ReportsPage from '../components/ReportsPage';
 ---
-<Layout title="Trade Reports">
+<Layout title="Trade Reports" requireAuth={true}>
   <body data-page="reports">
     <ReportsPage client:load />
   </body>

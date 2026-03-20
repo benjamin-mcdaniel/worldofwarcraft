@@ -2,6 +2,6 @@
 import Layout from '../layouts/Layout.astro';
 import FavoritesPage from '../components/FavoritesPage';
 ---
-<Layout title="Favorites">
+<Layout title="Favorites" requireAuth={true}>
   <FavoritesPage client:load />
 </Layout>
