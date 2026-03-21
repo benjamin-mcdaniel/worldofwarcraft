@@ -100,7 +100,12 @@ export default function ItemDetail({ itemKey }: Props) {
     setStateError(null);
     items.getState(itemKey, realmId)
       .then(data => setState(data as ItemState))
-      .catch((e: any) => setStateError(e?.message ?? 'Failed to load price data'))
+      .catch((e: any) => {
+        const msg: string = e?.message ?? '';
+        // 404 = no import data for this item on this realm — not an error
+        if (msg.includes('404') || msg === 'Item not found') setState(null);
+        else setStateError(msg || 'Failed to load price data');
+      })
       .finally(() => setLoading(false));
   }, [itemKey, realmId]);
 
