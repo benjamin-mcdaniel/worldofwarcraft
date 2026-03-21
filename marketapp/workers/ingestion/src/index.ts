@@ -218,16 +218,6 @@ async function processCommodities(
     })),
   });
 
-  // Update per-item history files
-  let updated = 0;
-  for (const [itemId, state] of itemMap) {
-    const itemKey = `commodities/${region}/items/${itemId}.json`;
-    const existing = await getJson<ItemState>(bucket, itemKey);
-    const itemState = buildItemState(state.price, state.qty, snapshot, existing);
-    await putJson(bucket, itemKey, itemState);
-    updated++;
-  }
-
   // Update metadata
   await putJson(bucket, metaKey, {
     lastModified,
@@ -235,8 +225,8 @@ async function processCommodities(
     itemCount: itemMap.size,
   });
 
-  console.log(`[${region}] Commodities: ${updated} items updated`);
-  return updated;
+  console.log(`[${region}] Commodities: ${itemMap.size} items in snapshot (per-item history skipped for performance)`);
+  return itemMap.size;
 }
 
 // ─── Process Realm Auctions ───────────────────────────────────────────────────
@@ -290,16 +280,6 @@ async function processRealmAuctions(
     })),
   });
 
-  // Update per-item history files
-  let updated = 0;
-  for (const [itemKey, state] of itemMap) {
-    const key = `realm/${realmId}/items/${itemKey.replace(/:/g, '%3A')}.json`;
-    const existing = await getJson<ItemState>(bucket, key);
-    const itemState = buildItemState(state.price, state.qty, snapshot, existing);
-    await putJson(bucket, key, itemState);
-    updated++;
-  }
-
   // Update metadata
   await putJson(bucket, metaKey, {
     lastModified,
@@ -307,8 +287,8 @@ async function processRealmAuctions(
     itemCount: itemMap.size,
   });
 
-  console.log(`[${region}] Realm ${realmId}: ${updated} items updated`);
-  return updated;
+  console.log(`[${region}] Realm ${realmId}: ${itemMap.size} items in snapshot (per-item history skipped for performance)`);
+  return itemMap.size;
 }
 
 // ─── Main Ingestion Run ───────────────────────────────────────────────────────

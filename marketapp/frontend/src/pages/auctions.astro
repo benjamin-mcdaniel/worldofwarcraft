@@ -8,13 +8,12 @@ import Layout from '../layouts/Layout.astro';
 
 <script>
   import { createRoot } from 'react-dom/client';
+  import { createElement } from 'react';
   import { StrictMode } from 'react';
   import RealmAuctionsPage from '../components/RealmAuctionsPage';
 
   const root = createRoot(document.getElementById('auctions-root')!);
   root.render(
-    <StrictMode>
-      <RealmAuctionsPage />
-    </StrictMode>
+    createElement(StrictMode, null, createElement(RealmAuctionsPage))
   );
 </script>
