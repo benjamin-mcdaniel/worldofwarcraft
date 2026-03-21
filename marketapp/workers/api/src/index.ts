@@ -280,6 +280,58 @@ route('GET', '/api/item/:itemKey/realm/:realmId', false, async (req, env, p) => 
   return new Response(await obj.text(), { headers: { 'Content-Type': 'application/json', ...cors() } });
 });
 
+// ─── Commodities Routes ──────────────────────────────────────────────────────
+
+// Get all commodities for a region with current prices
+route('GET', '/api/commodities/:region', false, async (_req, env, p) => {
+  const region = p.region.toLowerCase();
+  if (region !== 'us' && region !== 'eu') return err('Invalid region. Must be us or eu', 400);
+  const obj = await env.R2_BUCKET.get(`commodities/${region}/current.json`);
+  if (!obj) return err('No commodity data available for this region', 404);
+  return new Response(await obj.text(), { headers: { 'Content-Type': 'application/json', ...cors() } });
+});
+
+// Get price history for a single commodity item
+route('GET', '/api/commodities/:region/item/:itemId', false, async (_req, env, p) => {
+  const region = p.region.toLowerCase();
+  if (region !== 'us' && region !== 'eu') return err('Invalid region. Must be us or eu', 400);
+  const obj = await env.R2_BUCKET.get(`commodities/${region}/items/${p.itemId}.json`);
+  if (!obj) return err('Commodity item not found', 404);
+  return new Response(await obj.text(), { headers: { 'Content-Type': 'application/json', ...cors() } });
+});
+
+// Get commodities metadata (last update time, item count)
+route('GET', '/api/commodities/:region/meta', false, async (_req, env, p) => {
+  const region = p.region.toLowerCase();
+  if (region !== 'us' && region !== 'eu') return err('Invalid region. Must be us or eu', 400);
+  const obj = await env.R2_BUCKET.get(`commodities/${region}/meta.json`);
+  if (!obj) return err('No metadata available', 404);
+  return new Response(await obj.text(), { headers: { 'Content-Type': 'application/json', ...cors() } });
+});
+
+// ─── Realm Auctions Routes ───────────────────────────────────────────────────
+
+// Get all realm auctions with current prices
+route('GET', '/api/realm/:realmId/auctions', false, async (_req, env, p) => {
+  const obj = await env.R2_BUCKET.get(`realm/${p.realmId}/current.json`);
+  if (!obj) return err('No auction data available for this realm', 404);
+  return new Response(await obj.text(), { headers: { 'Content-Type': 'application/json', ...cors() } });
+});
+
+// Get price history for a single realm item
+route('GET', '/api/realm/:realmId/item/:itemKey', false, async (_req, env, p) => {
+  const obj = await env.R2_BUCKET.get(`realm/${p.realmId}/items/${p.itemKey.replace(/:/g, '%3A')}.json`);
+  if (!obj) return err('Realm item not found', 404);
+  return new Response(await obj.text(), { headers: { 'Content-Type': 'application/json', ...cors() } });
+});
+
+// Get realm auction metadata
+route('GET', '/api/realm/:realmId/meta', false, async (_req, env, p) => {
+  const obj = await env.R2_BUCKET.get(`realm/${p.realmId}/meta.json`);
+  if (!obj) return err('No metadata available', 404);
+  return new Response(await obj.text(), { headers: { 'Content-Type': 'application/json', ...cors() } });
+});
+
 // Analytics
 route('GET', '/api/analytics/:type', true, async (req, env, p) => {
   const url = new URL(req.url);

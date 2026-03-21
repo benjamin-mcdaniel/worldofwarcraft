@@ -1,0 +1,20 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Commodities - WoW Market Tracker">
+  <div id="commodities-root"></div>
+</Layout>
+
+<script>
+  import { createRoot } from 'react-dom/client';
+  import { StrictMode } from 'react';
+  import CommoditiesPage from '../components/CommoditiesPage';
+
+  const root = createRoot(document.getElementById('commodities-root')!);
+  root.render(
+    <StrictMode>
+      <CommoditiesPage />
+    </StrictMode>
+  );
+</script>
