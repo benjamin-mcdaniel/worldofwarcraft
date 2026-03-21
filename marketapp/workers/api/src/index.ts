@@ -356,20 +356,35 @@ route('POST', '/api/profiles/:id/run', true, async (req, env, p) => {
 });
 
 // Favorites
+type FavRow = { id: number; user_id: number; item_key: string; realm_id: number; noted_price: number | null; created_at: number };
+const favToJson = (r: FavRow) => ({ id: r.id, itemKey: r.item_key, realmId: r.realm_id, notedPrice: r.noted_price ?? undefined, createdAt: r.created_at });
+
 route('GET', '/api/favorites', true, async (req, env) => {
   const user = await authenticate(req, env);
-  const result = await env.DB.prepare('SELECT * FROM favorites WHERE user_id = ? ORDER BY created_at DESC').bind(user!.userId).all();
-  return json(result.results);
+  const result = await env.DB.prepare('SELECT * FROM favorites WHERE user_id = ? ORDER BY created_at DESC').bind(user!.userId).all<FavRow>();
+  return json(result.results.map(favToJson));
+});
+
+route('GET', '/api/favorites/check/:itemKey', true, async (req, env, p) => {
+  const user = await authenticate(req, env);
+  const row = await env.DB.prepare('SELECT id FROM favorites WHERE user_id = ? AND item_key = ?')
+    .bind(user!.userId, decodeURIComponent(p.itemKey)).first<{ id: number }>();
+  return json({ isFavorite: row !== null });
 });
 
 route('POST', '/api/favorites', true, async (req, env) => {
   const user = await authenticate(req, env);
   const body = await req.json() as { itemKey: string; realmId: number; notedPrice?: number };
   const now = Date.now();
-  const result = await env.DB.prepare(
+  // Try insert; if ignored (duplicate), fetch existing row
+  let row = await env.DB.prepare(
     'INSERT OR IGNORE INTO favorites (user_id, item_key, realm_id, noted_price, created_at) VALUES (?, ?, ?, ?, ?) RETURNING *'
-  ).bind(user!.userId, body.itemKey, body.realmId, body.notedPrice ?? null, now).first();
-  return json(result, 201);
+  ).bind(user!.userId, body.itemKey, body.realmId, body.notedPrice ?? null, now).first<FavRow>();
+  if (!row) {
+    row = await env.DB.prepare('SELECT * FROM favorites WHERE user_id = ? AND item_key = ?')
+      .bind(user!.userId, body.itemKey).first<FavRow>();
+  }
+  return json(row ? favToJson(row) : null, 201);
 });
 
 route('DELETE', '/api/favorites/:itemKey', true, async (req, env, p) => {

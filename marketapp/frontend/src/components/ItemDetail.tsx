@@ -85,12 +85,14 @@ export default function ItemDetail({ itemKey }: Props) {
     Promise.allSettled([
       catalogApi.item(itemId),
       realmId ? items.getState(itemKey, realmId) : Promise.reject('no realm'),
-    ]).then(([metaRes, stateRes]) => {
+      favorites.check(itemKey),
+    ]).then(([metaRes, stateRes, favRes]) => {
       if (metaRes.status === 'fulfilled') setMeta(metaRes.value);
       if (stateRes.status === 'fulfilled') setState(stateRes.value as ItemState);
+      if (favRes.status === 'fulfilled') setIsFav(favRes.value.isFavorite);
       setLoading(false);
     });
-  }, [itemKey, realmId]);
+  }, [itemKey]);
 
   async function toggleFavorite() {
     try {

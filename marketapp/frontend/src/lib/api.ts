@@ -104,6 +104,7 @@ export const profiles = {
 // ─── Favorites ───────────────────────────────────────────────────────────────
 export const favorites = {
   list: () => request<FavoriteItem[]>('/favorites'),
+  check: (itemKey: string) => request<{ isFavorite: boolean }>(`/favorites/check/${encodeURIComponent(itemKey)}`),
   add: (itemKey: string, realmId: number, notedPrice?: number) =>
     request<FavoriteItem>('/favorites', {
       method: 'POST',

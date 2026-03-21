@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { favorites as favApi } from '../lib/api';
+import { favorites as favApi, catalog as catalogApi } from '../lib/api';
 import { ItemIcon } from './shared/ItemIcon';
 import { MoneyDisplay } from './shared/MoneyDisplay';
-import type { FavoriteItem } from '../lib/types';
+import { QUALITY_COLORS } from '../lib/types';
+import type { FavoriteItem, ItemMeta } from '../lib/types';
 
 export default function FavoritesPage() {
   const [favs, setFavs] = useState<FavoriteItem[]>([]);
+  const [metas, setMetas] = useState<Record<string, ItemMeta>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [removing, setRemoving] = useState<string | null>(null);
@@ -15,7 +17,14 @@ export default function FavoritesPage() {
     setError('');
     try {
       const data = await favApi.list();
-      setFavs(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setFavs(list);
+      // Batch-fetch item names from catalog
+      const ids = [...new Set(list.map(f => parseInt(f.itemKey.split(':')[0])).filter(Boolean))];
+      const results = await Promise.allSettled(ids.map(id => catalogApi.item(id)));
+      const map: Record<string, ItemMeta> = {};
+      results.forEach((r, i) => { if (r.status === 'fulfilled') map[String(ids[i])] = r.value; });
+      setMetas(map);
     } catch (e: any) {
       setError(e.message ?? 'Failed to load favorites');
     } finally {
@@ -79,7 +88,11 @@ export default function FavoritesPage() {
             </tr>
           </thead>
           <tbody>
-            {favs.map(fav => (
+            {favs.map(fav => {
+              const itemId = fav.itemKey.split(':')[0];
+              const meta = metas[itemId];
+              const qualColor = meta?.quality !== undefined ? (QUALITY_COLORS as any)[meta.quality] ?? '#d4c5a0' : '#d4c5a0';
+              return (
               <tr
                 key={fav.itemKey}
                 style={{ borderBottom: '1px solid #1e2028', transition: 'background 0.1s', cursor: 'pointer' }}
@@ -89,9 +102,10 @@ export default function FavoritesPage() {
               >
                 <td style={{ padding: '8px 10px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ fontSize: 18, color: '#f0c060' }}>&#11088;</div>
+                    <ItemIcon icon={meta?.icon} quality={meta?.quality} size={28} alt={meta?.name} />
                     <div>
-                      <div style={{ color: '#d4c5a0' }}>{fav.itemKey}</div>
+                      <div style={{ color: qualColor, fontWeight: 500 }}>{meta?.name ?? fav.itemKey}</div>
+                      <div style={{ fontSize: 11, color: '#555', fontFamily: 'monospace' }}>{fav.itemKey}</div>
                     </div>
                   </div>
                 </td>
@@ -120,7 +134,8 @@ export default function FavoritesPage() {
                   </button>
                 </td>
               </tr>
-            ))}
+            );
+            })}
           </tbody>
         </table>
       )}
