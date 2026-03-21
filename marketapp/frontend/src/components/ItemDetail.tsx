@@ -60,6 +60,7 @@ export default function ItemDetail({ itemKey }: Props) {
   const [state, setState] = useState<ItemState | null>(null);
   const [meta, setMeta] = useState<ItemMeta | null>(null);
   const [loading, setLoading] = useState(true);
+  const [stateError, setStateError] = useState<string | null>(null);
   const [isFav, setIsFav] = useState(false);
   const [realmId, setRealmId] = useState<number>(() => {
     if (typeof localStorage === 'undefined') return 0;
@@ -67,7 +68,7 @@ export default function ItemDetail({ itemKey }: Props) {
     return parseInt(localStorage.getItem(`wow_market_realm_${region}`) ?? '0');
   });
 
-  // Sync with global realm selector in the top bar
+  // Sync realmId with the global top-bar selector
   useEffect(() => {
     const handler = (e: Event) => {
       const id = (e as CustomEvent).detail?.realmId;
@@ -77,22 +78,31 @@ export default function ItemDetail({ itemKey }: Props) {
     return () => window.removeEventListener('realmChanged', handler);
   }, []);
 
+  // Effect 1: catalog meta + favorite status — only depends on itemKey
   useEffect(() => {
     if (!itemKey) return;
     const itemId = parseInt(itemKey.split(':')[0]);
-    setLoading(true);
-    setState(null);
     Promise.allSettled([
       catalogApi.item(itemId),
-      realmId ? items.getState(itemKey, realmId) : Promise.reject('no realm'),
       favorites.check(itemKey),
-    ]).then(([metaRes, stateRes, favRes]) => {
+    ]).then(([metaRes, favRes]) => {
       if (metaRes.status === 'fulfilled') setMeta(metaRes.value);
-      if (stateRes.status === 'fulfilled') setState(stateRes.value as ItemState);
       if (favRes.status === 'fulfilled') setIsFav(favRes.value.isFavorite);
-      setLoading(false);
     });
   }, [itemKey]);
+
+  // Effect 2: realm-specific price history — re-runs whenever itemKey OR realmId changes
+  useEffect(() => {
+    if (!itemKey) return;
+    if (!realmId) { setState(null); setStateError(null); setLoading(false); return; }
+    setLoading(true);
+    setState(null);
+    setStateError(null);
+    items.getState(itemKey, realmId)
+      .then(data => setState(data as ItemState))
+      .catch((e: any) => setStateError(e?.message ?? 'Failed to load price data'))
+      .finally(() => setLoading(false));
+  }, [itemKey, realmId]);
 
   async function toggleFavorite() {
     try {
@@ -174,8 +184,14 @@ export default function ItemDetail({ itemKey }: Props) {
       {/* Price history chart */}
       <div className="bg-bg2 border border-border rounded-lg p-5">
         <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Price History</div>
-        {history.length === 0 ? (
-          <div className="text-center text-gray-600 text-sm py-8">No price history recorded for this realm yet.</div>
+        {loading ? (
+          <div className="text-center text-gray-500 text-sm py-8 animate-pulse">Loading…</div>
+        ) : !realmId ? (
+          <div className="text-center text-gray-600 text-sm py-8">Select a realm in the top bar to view price history.</div>
+        ) : stateError ? (
+          <div className="text-center text-red-500 text-sm py-8">{stateError}</div>
+        ) : history.length === 0 ? (
+          <div className="text-center text-gray-600 text-sm py-8">No price history imported for this item on this realm yet.</div>
         ) : (
           <>
             <PriceChart history={history} />
