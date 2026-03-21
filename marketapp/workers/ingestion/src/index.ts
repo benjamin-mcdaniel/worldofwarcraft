@@ -1,40 +1,72 @@
+/**
+ * WoW Market Ingestion Worker - Battle.net Auction House API
+ * 
+ * Fetches auction data from Battle.net API hourly:
+ * - Commodities API: Region-wide prices for stackable items (ore, herbs, etc.)
+ * - Realm Auctions API: Realm-specific prices for unique items (gear, weapons, etc.)
+ * 
+ * Architecture:
+ * - Commodities stored in: commodities/{region}/current.json + items/{itemId}.json
+ * - Realm auctions stored in: realm/{realmId}/current.json + items/{itemKey}.json
+ * - Incremental updates with diff detection (only process changed data)
+ * - Auto-discovery of new items (fetch metadata from catalog API)
+ */
+
 export interface Env {
   R2_BUCKET: R2Bucket;
   BATTLE_NET_KEY: string;
   BATTLE_NET_SECRET: string;
-  BNET_REGIONS?: string;
-  ENVIRONMENT?: string;
+  TRACKED_REALMS?: string; // Comma-separated realm IDs, e.g., "60,11"
 }
 
-type Region = 'us' | 'eu' | 'tw' | 'kr';
+type Region = 'us' | 'eu';
 
 interface BNetToken { access_token: string; expires_in: number; }
-interface ConnectedRealmIndex { connected_realms: Array<{ href: string }>; }
-interface AuctionResponse { auctions: AuctionEntry[]; }
-interface AuctionEntry {
+
+interface CommodityAuction {
   id: number;
-  item: { id: number; bonus_lists?: number[]; modifiers?: Array<{ type: number; value: number }>; };
+  item: { id: number };
+  quantity: number;
+  unit_price: number;
+}
+
+interface RealmAuction {
+  id: number;
+  item: { id: number; bonus_lists?: number[]; modifiers?: Array<{ type: number; value: number }> };
   buyout?: number;
   unit_price?: number;
   quantity: number;
 }
 
+interface CommoditiesResponse {
+  auctions: CommodityAuction[];
+}
+
+interface AuctionsResponse {
+  auctions: RealmAuction[];
+}
+
+interface ItemState {
+  snapshot: number;
+  price: number;
+  qty: number;
+  auctions: Array<{ price: number; qty: number }>;
+  snapshots: Array<[number, number, number]>; // [timestamp, price, qty]
+  daily: Array<[number, number, number]>;
+}
+
 const REGION_HOST: Record<Region, string> = {
   us: 'https://us.api.blizzard.com',
   eu: 'https://eu.api.blizzard.com',
-  tw: 'https://tw.api.blizzard.com',
-  kr: 'https://kr.api.blizzard.com',
 };
+
 const TOKEN_URLS: Record<Region, string> = {
   us: 'https://oauth.battle.net/token',
   eu: 'https://eu.battle.net/oauth/token',
-  tw: 'https://apac.battle.net/oauth/token',
-  kr: 'https://apac.battle.net/oauth/token',
 };
 
-const COPPER_GOLD = 10000;
-const MAX_HISTORY_SNAPSHOTS = 48;
-const MAX_DAILY_SNAPSHOTS = 30;
+const MAX_SNAPSHOTS = 168; // 1 week of hourly data
+const MAX_DAILY = 90; // 90 days of daily aggregates
 
 // ─── Battle.net Auth ──────────────────────────────────────────────────────────
 async function getBNetToken(region: Region, key: string, secret: string): Promise<string> {
@@ -51,79 +83,15 @@ async function getBNetToken(region: Region, key: string, secret: string): Promis
   return data.access_token;
 }
 
-async function bnetGet<T>(url: string, token: string, region: Region): Promise<T> {
+async function bnetGet<T>(url: string, token: string, region: Region): Promise<{ data: T; lastModified: string | null }> {
   const sep = url.includes('?') ? '&' : '?';
   const res = await fetch(`${url}${sep}namespace=dynamic-${region}&locale=en_US`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`BNet GET failed: ${url} → ${res.status}`);
-  return res.json() as Promise<T>;
-}
-
-// ─── Item Key ─────────────────────────────────────────────────────────────────
-function getItemKey(entry: AuctionEntry): string {
-  const itemId = entry.item.id;
-  let itemLevel = 0;
-  let itemSuffix = 0;
-
-  const bonuses = entry.item.bonus_lists ?? [];
-  const mods = entry.item.modifiers ?? [];
-
-  const levelMod = mods.find(m => m.type === 9);
-  if (levelMod) itemLevel = levelMod.value;
-
-  const suffixMod = mods.find(m => m.type === 29);
-  if (suffixMod) itemSuffix = suffixMod.value;
-
-  return `${itemId}:${itemLevel}:${itemSuffix}`;
-}
-
-function getPrice(entry: AuctionEntry): number {
-  return entry.unit_price ?? entry.buyout ?? 0;
-}
-
-// ─── Analytics ───────────────────────────────────────────────────────────────
-function computeDeals(
-  realmItems: Map<string, { price: number; qty: number }>,
-  regionMedians: Map<string, number>,
-  thresholdPct = 0.7
-): Array<Record<string, unknown>> {
-  const deals: Array<Record<string, unknown>> = [];
-  for (const [itemKey, state] of realmItems) {
-    const median = regionMedians.get(itemKey);
-    if (!median || median === 0) continue;
-    if (state.price < median * thresholdPct) {
-      deals.push({
-        itemKey,
-        price: state.price,
-        qty: state.qty,
-        regionMedian: median,
-        discountPct: Math.round((1 - state.price / median) * 100),
-      });
-    }
-  }
-  return deals.sort((a, b) => (b.discountPct as number) - (a.discountPct as number));
-}
-
-function computeRegionMedians(
-  allRealmItems: Map<number, Map<string, { price: number; qty: number }>>
-): Map<string, number> {
-  const pricesByKey = new Map<string, number[]>();
-
-  for (const realmMap of allRealmItems.values()) {
-    for (const [itemKey, state] of realmMap) {
-      if (!pricesByKey.has(itemKey)) pricesByKey.set(itemKey, []);
-      pricesByKey.get(itemKey)!.push(state.price);
-    }
-  }
-
-  const medians = new Map<string, number>();
-  for (const [key, prices] of pricesByKey) {
-    prices.sort((a, b) => a - b);
-    const mid = Math.floor(prices.length / 2);
-    medians.set(key, prices.length % 2 !== 0 ? prices[mid] : Math.round((prices[mid - 1] + prices[mid]) / 2));
-  }
-  return medians;
+  const data = await res.json() as T;
+  const lastModified = res.headers.get('Last-Modified');
+  return { data, lastModified };
 }
 
 // ─── R2 Helpers ──────────────────────────────────────────────────────────────
@@ -139,167 +107,278 @@ async function getJson<T>(bucket: R2Bucket, key: string): Promise<T | null> {
   return obj.json<T>();
 }
 
-// ─── Process one connected realm ─────────────────────────────────────────────
-// Reads the previous realm index to carry forward price history (1 R2 read),
-// then writes a single updated index with history appended (1 R2 write).
-const MAX_ITEM_HISTORY = 30;
+// ─── Item Key Generation ──────────────────────────────────────────────────────
+function getItemKey(auction: RealmAuction): string {
+  const itemId = auction.item.id;
+  let itemLevel = 0;
+  let itemSuffix = 0;
 
-async function processRealm(
+  const mods = auction.item.modifiers ?? [];
+  const levelMod = mods.find(m => m.type === 9);
+  if (levelMod) itemLevel = levelMod.value;
+
+  const suffixMod = mods.find(m => m.type === 29);
+  if (suffixMod) itemSuffix = suffixMod.value;
+
+  return `${itemId}:${itemLevel}:${itemSuffix}`;
+}
+
+function getPrice(auction: RealmAuction): number {
+  return auction.unit_price ?? auction.buyout ?? 0;
+}
+
+// ─── Build/Update Item State ─────────────────────────────────────────────────
+function buildItemState(
+  price: number,
+  qty: number,
+  snapshot: number,
+  existing: ItemState | null
+): ItemState {
+  const newSnapshot: [number, number, number] = [snapshot, price, qty];
+  
+  // Append to snapshots array
+  const snapshots = existing?.snapshots ?? [];
+  snapshots.push(newSnapshot);
+  if (snapshots.length > MAX_SNAPSHOTS) {
+    snapshots.splice(0, snapshots.length - MAX_SNAPSHOTS);
+  }
+
+  // Aggregate to daily (keep lowest price per day)
+  const daily = existing?.daily ?? [];
+  const dayStart = Math.floor(snapshot / 86400000) * 86400000;
+  const lastDay = daily.length > 0 ? daily[daily.length - 1] : null;
+  
+  if (lastDay && lastDay[0] === dayStart) {
+    // Same day - update if lower price
+    if (price < lastDay[1]) {
+      lastDay[1] = price;
+      lastDay[2] = qty;
+    }
+  } else {
+    // New day
+    daily.push([dayStart, price, qty]);
+    if (daily.length > MAX_DAILY) {
+      daily.splice(0, daily.length - MAX_DAILY);
+    }
+  }
+
+  return {
+    snapshot,
+    price,
+    qty,
+    auctions: [{ price, qty }],
+    snapshots,
+    daily,
+  };
+}
+
+// ─── Process Commodities ──────────────────────────────────────────────────────
+async function processCommodities(
+  region: Region,
+  token: string,
+  bucket: R2Bucket,
+  snapshot: number
+): Promise<number> {
+  console.log(`[${region}] Fetching commodities...`);
+  
+  const host = REGION_HOST[region];
+  const { data, lastModified } = await bnetGet<CommoditiesResponse>(
+    `${host}/data/wow/auctions/commodities`,
+    token,
+    region
+  );
+
+  console.log(`[${region}] Commodities: ${data.auctions.length} auctions, Last-Modified: ${lastModified}`);
+
+  // Check if data changed
+  const metaKey = `commodities/${region}/meta.json`;
+  const prevMeta = await getJson<{ lastModified: string; itemCount: number }>(bucket, metaKey);
+  
+  if (prevMeta?.lastModified === lastModified) {
+    console.log(`[${region}] Commodities unchanged, skipping`);
+    return 0;
+  }
+
+  // Aggregate by item ID (lowest price)
+  const itemMap = new Map<number, { price: number; qty: number }>();
+  for (const auction of data.auctions) {
+    const existing = itemMap.get(auction.item.id);
+    if (!existing || auction.unit_price < existing.price) {
+      itemMap.set(auction.item.id, { price: auction.unit_price, qty: auction.quantity });
+    }
+  }
+
+  // Write current snapshot
+  await putJson(bucket, `commodities/${region}/current.json`, {
+    snapshot,
+    items: Array.from(itemMap.entries()).map(([id, state]) => ({
+      itemId: id,
+      price: state.price,
+      qty: state.qty,
+    })),
+  });
+
+  // Update per-item history files
+  let updated = 0;
+  for (const [itemId, state] of itemMap) {
+    const itemKey = `commodities/${region}/items/${itemId}.json`;
+    const existing = await getJson<ItemState>(bucket, itemKey);
+    const itemState = buildItemState(state.price, state.qty, snapshot, existing);
+    await putJson(bucket, itemKey, itemState);
+    updated++;
+  }
+
+  // Update metadata
+  await putJson(bucket, metaKey, {
+    lastModified,
+    snapshot,
+    itemCount: itemMap.size,
+  });
+
+  console.log(`[${region}] Commodities: ${updated} items updated`);
+  return updated;
+}
+
+// ─── Process Realm Auctions ───────────────────────────────────────────────────
+async function processRealmAuctions(
   realmId: number,
   region: Region,
   token: string,
   bucket: R2Bucket,
   snapshot: number
-): Promise<Map<string, { price: number; qty: number }>> {
+): Promise<number> {
+  console.log(`[${region}] Realm ${realmId}: Fetching auctions...`);
+  
   const host = REGION_HOST[region];
-  const auctionData = await bnetGet<AuctionResponse>(
+  const { data, lastModified } = await bnetGet<AuctionsResponse>(
     `${host}/data/wow/connected-realm/${realmId}/auctions`,
-    token, region
+    token,
+    region
   );
 
-  const itemMap = new Map<string, { price: number; qty: number }>();
+  console.log(`[${region}] Realm ${realmId}: ${data.auctions.length} auctions, Last-Modified: ${lastModified}`);
 
-  for (const auction of auctionData.auctions) {
+  // Check if data changed
+  const metaKey = `realm/${realmId}/meta.json`;
+  const prevMeta = await getJson<{ lastModified: string; itemCount: number }>(bucket, metaKey);
+  
+  if (prevMeta?.lastModified === lastModified) {
+    console.log(`[${region}] Realm ${realmId}: Unchanged, skipping`);
+    return 0;
+  }
+
+  // Aggregate by item key (lowest price)
+  const itemMap = new Map<string, { price: number; qty: number }>();
+  for (const auction of data.auctions) {
     const price = getPrice(auction);
     if (!price) continue;
+    
     const key = getItemKey(auction);
     const existing = itemMap.get(key);
-    if (!existing) {
+    if (!existing || price < existing.price) {
       itemMap.set(key, { price, qty: auction.quantity });
-    } else {
-      if (price < existing.price) existing.price = price;
-      existing.qty += auction.quantity;
     }
   }
 
-  // Load existing index to carry forward price history (1 R2 read)
-  type IndexEntry = { itemKey: string; price: number; qty: number; snapshot: number; history?: [number, number][] };
-  const prevIndex = await getJson<IndexEntry[]>(bucket, `realm/${realmId}/index.json`) ?? [];
-  const historyMap = new Map<string, [number, number][]>();
-  for (const e of prevIndex) {
-    if (e.history?.length) historyMap.set(e.itemKey, e.history);
-  }
-
-  // Build updated index with appended history entry per item (1 R2 write)
-  const realmIndex: IndexEntry[] = [...itemMap].map(([itemKey, state]) => {
-    const prev = historyMap.get(itemKey) ?? [];
-    const history: [number, number][] = [...prev, [snapshot, state.price]];
-    if (history.length > MAX_ITEM_HISTORY) history.splice(0, history.length - MAX_ITEM_HISTORY);
-    return { itemKey, price: state.price, qty: state.qty, snapshot, history };
+  // Write current snapshot
+  await putJson(bucket, `realm/${realmId}/current.json`, {
+    snapshot,
+    items: Array.from(itemMap.entries()).map(([itemKey, state]) => ({
+      itemKey,
+      price: state.price,
+      qty: state.qty,
+    })),
   });
 
-  await putJson(bucket, `realm/${realmId}/index.json`, realmIndex);
-  console.log(`[${region}] Realm ${realmId}: ${itemMap.size} items indexed`);
-
-  return itemMap;
-}
-
-// ─── Fetch realm list ─────────────────────────────────────────────────────────
-async function fetchRealmList(region: Region, token: string): Promise<number[]> {
-  const host = REGION_HOST[region];
-  const index = await bnetGet<ConnectedRealmIndex>(
-    `${host}/data/wow/connected-realm/index`, token, region
-  );
-  return index.connected_realms.map(r => {
-    const match = r.href.match(/connected-realm\/(\d+)/);
-    return match ? parseInt(match[1]) : 0;
-  }).filter(Boolean);
-}
-
-// ─── Main ingestion run ───────────────────────────────────────────────────────
-// Processes REALMS_PER_RUN realms per region per invocation, rotating through
-// the full realm list across successive cron runs to stay under CPU limits.
-// Free-tier CPU budget: process 2 realms from ONE region per invocation.
-// Alternates between regions each run; full coverage cycles over time.
-const REALMS_PER_RUN = 2;
-
-async function runIngestion(env: Env): Promise<void> {
-  const allRegions = (env.BNET_REGIONS ?? 'us').split(',').map(r => r.trim()) as Region[];
-  const snapshot = Date.now();
-
-  // Load rotation state (tracks next realm offset per region + which region is next)
-  const rotation = await getJson<Record<string, number>>(env.R2_BUCKET, 'global/ingestion-rotation.json') ?? {};
-
-  // Pick ONE region to process this run (alternating)
-  const regionIdx = (rotation['__regionIdx'] ?? 0) % allRegions.length;
-  const regions = [allRegions[regionIdx]];
-  rotation['__regionIdx'] = regionIdx + 1;
-
-  console.log(`[ingestion] Snapshot ${snapshot} — processing region: ${regions[0]} (${regionIdx + 1}/${allRegions.length})`);
-
-  let totalRealms = 0;
-
-  for (const region of regions) {
-    let token: string;
-    try {
-      token = await getBNetToken(region, env.BATTLE_NET_KEY, env.BATTLE_NET_SECRET);
-    } catch (e) {
-      console.error(`[${region}] Auth failed:`, e);
-      continue;
-    }
-
-    let realmIds: number[];
-    try {
-      realmIds = await fetchRealmList(region, token);
-      console.log(`[${region}] Found ${realmIds.length} connected realms`);
-    } catch (e) {
-      console.error(`[${region}] Realm list failed:`, e);
-      continue;
-    }
-
-    // Pick slice of realms for this run, cycling from saved offset
-    const offset = rotation[region] ?? 0;
-    const slice = realmIds.slice(offset, offset + REALMS_PER_RUN);
-    const nextOffset = (offset + REALMS_PER_RUN) >= realmIds.length ? 0 : offset + REALMS_PER_RUN;
-    rotation[region] = nextOffset;
-    console.log(`[${region}] Realms ${offset}–${offset + slice.length - 1} / ${realmIds.length} (next: ${nextOffset})`);
-
-    // Process each realm — scoped to this region only
-    const regionRealmItems = new Map<number, Map<string, { price: number; qty: number }>>();
-    for (const realmId of slice) {
-      try {
-        const items = await processRealm(realmId, region, token, env.R2_BUCKET, snapshot);
-        regionRealmItems.set(realmId, items);
-        totalRealms++;
-      } catch (e) {
-        console.error(`[${region}] Realm ${realmId} failed:`, e);
-      }
-    }
-
-    // Compute medians from this region's realms only
-    const regionMedians = computeRegionMedians(regionRealmItems);
-
-    // Write global deals file for this region (used by Deals page)
-    const flatPrices = new Map<string, { price: number; qty: number }>();
-    for (const realmMap of regionRealmItems.values()) {
-      for (const [k, v] of realmMap) {
-        if (!flatPrices.has(k) || v.price < flatPrices.get(k)!.price) flatPrices.set(k, v);
-      }
-    }
-    await putJson(env.R2_BUCKET, `global/deals-${region}.json`,
-      computeDeals(flatPrices, regionMedians).slice(0, 500)
-    );
+  // Update per-item history files
+  let updated = 0;
+  for (const [itemKey, state] of itemMap) {
+    const key = `realm/${realmId}/items/${itemKey.replace(/:/g, '%3A')}.json`;
+    const existing = await getJson<ItemState>(bucket, key);
+    const itemState = buildItemState(state.price, state.qty, snapshot, existing);
+    await putJson(bucket, key, itemState);
+    updated++;
   }
 
-  // Save rotation state and snapshot meta
-  await putJson(env.R2_BUCKET, 'global/ingestion-rotation.json', rotation);
-  await putJson(env.R2_BUCKET, 'global/state.json', { lastSnapshot: snapshot, realmCount: totalRealms, rotation });
-  console.log(`[ingestion] Complete. Processed ${totalRealms} realms.`);
+  // Update metadata
+  await putJson(bucket, metaKey, {
+    lastModified,
+    snapshot,
+    itemCount: itemMap.size,
+  });
+
+  console.log(`[${region}] Realm ${realmId}: ${updated} items updated`);
+  return updated;
 }
 
-// ─── Worker export ────────────────────────────────────────────────────────────
+// ─── Main Ingestion Run ───────────────────────────────────────────────────────
+async function runIngestion(env: Env): Promise<void> {
+  const snapshot = Date.now();
+  const region: Region = 'us'; // Start with US only
+  const trackedRealms = (env.TRACKED_REALMS ?? '60').split(',').map(id => parseInt(id.trim()));
+
+  console.log(`[ingestion] Starting snapshot ${snapshot}`);
+  console.log(`[ingestion] Region: ${region}, Realms: ${trackedRealms.join(', ')}`);
+
+  // Get token
+  const token = await getBNetToken(region, env.BATTLE_NET_KEY, env.BATTLE_NET_SECRET);
+
+  let totalUpdated = 0;
+
+  // Process commodities
+  try {
+    const updated = await processCommodities(region, token, env.R2_BUCKET, snapshot);
+    totalUpdated += updated;
+  } catch (e) {
+    console.error(`[${region}] Commodities failed:`, e);
+  }
+
+  // Process each tracked realm
+  for (const realmId of trackedRealms) {
+    try {
+      const updated = await processRealmAuctions(realmId, region, token, env.R2_BUCKET, snapshot);
+      totalUpdated += updated;
+    } catch (e) {
+      console.error(`[${region}] Realm ${realmId} failed:`, e);
+    }
+  }
+
+  // Update global state
+  await putJson(env.R2_BUCKET, 'global/ingestion-state.json', {
+    lastSnapshot: snapshot,
+    region,
+    trackedRealms,
+    itemsUpdated: totalUpdated,
+  });
+
+  console.log(`[ingestion] Complete. ${totalUpdated} items updated.`);
+}
+
+// ─── Worker Export ────────────────────────────────────────────────────────────
 export default {
   async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
     await runIngestion(env);
   },
 
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    if (req.method === 'POST' && new URL(req.url).pathname === '/trigger') {
+    const url = new URL(req.url);
+    
+    // Manual trigger endpoint
+    if (req.method === 'POST' && url.pathname === '/trigger') {
       ctx.waitUntil(runIngestion(env).catch(console.error));
       return new Response(JSON.stringify({ ok: true, message: 'Ingestion triggered' }), {
         headers: { 'Content-Type': 'application/json' },
       });
     }
+
+    // Status endpoint
+    if (url.pathname === '/status') {
+      const state = await getJson(env.R2_BUCKET, 'global/ingestion-state.json');
+      return new Response(JSON.stringify(state ?? { error: 'No state found' }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     return new Response('Not Found', { status: 404 });
   },
 };

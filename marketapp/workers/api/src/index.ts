@@ -273,7 +273,9 @@ route('GET', '/api/catalog/:itemId', false, async (_req, env, p) => {
 
 // Item state (public — market price data needs no auth)
 route('GET', '/api/item/:itemKey/realm/:realmId', false, async (req, env, p) => {
-  const obj = await env.R2_BUCKET.get(`realm/${p.realmId}/items/${encodeURIComponent(p.itemKey)}.json`);
+  // p.itemKey is already decoded by the router (e.g., "2770:0:0")
+  // R2 keys use URL encoding, so re-encode for the R2 path
+  const obj = await env.R2_BUCKET.get(`realm/${p.realmId}/items/${p.itemKey.replace(/:/g, '%3A')}.json`);
   if (!obj) return err('Item not found', 404);
   return new Response(await obj.text(), { headers: { 'Content-Type': 'application/json', ...cors() } });
 });
