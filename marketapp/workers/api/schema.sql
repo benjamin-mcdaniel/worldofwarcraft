@@ -41,9 +41,22 @@ CREATE TABLE IF NOT EXISTS reports (
   items         TEXT    NOT NULL DEFAULT '[]'
 );
 
+CREATE TABLE IF NOT EXISTS realm_requests (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  realm_name    TEXT    NOT NULL,
+  region        TEXT    NOT NULL,
+  reason        TEXT,
+  status        TEXT    NOT NULL DEFAULT 'pending',
+  created_at    INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+  reviewed_at   INTEGER,
+  reviewed_by   INTEGER REFERENCES users(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_profiles_user    ON profiles(user_id);
 CREATE INDEX IF NOT EXISTS idx_favorites_user   ON favorites(user_id);
 CREATE INDEX IF NOT EXISTS idx_reports_user     ON reports(user_id, generated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_realm_requests_status ON realm_requests(status, created_at DESC);
 
 -- Seed admin user (password: changeme — SHA256 of "changeme" + user_id=1)
 -- Replace password_hash with: SHA256("yourpassword" + "1") encoded as base64
