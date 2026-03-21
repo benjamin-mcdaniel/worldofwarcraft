@@ -113,6 +113,14 @@ route('GET', '/api/realms', false, async (_req, env) => {
   });
 });
 
+route('GET', '/api/realms/with-data', false, async (_req, env) => {
+  const obj = await env.R2_BUCKET.get('static/realms-with-data.json');
+  if (!obj) return json([]);
+  return new Response(await obj.text(), {
+    headers: { 'Content-Type': 'application/json', ...cors(), 'Cache-Control': 'public, max-age=300' },
+  });
+});
+
 route('GET', '/api/realms/snapshots', false, async (_req, env) => {
   const obj = await env.R2_BUCKET.get('global/state.json');
   if (!obj) return json([]);

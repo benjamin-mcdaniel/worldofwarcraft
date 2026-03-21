@@ -3,14 +3,14 @@ interface Props {
   title?: string;
   requireAuth?: boolean;
 }
-const { title = 'WoW Market', requireAuth = true } = Astro.props;
+const { title = 'Icecrown Citadel', requireAuth = true } = Astro.props;
 ---
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{title} — WoW Market</title>
+  <title>{title} — Icecrown Citadel</title>
   <link rel="preconnect" href="https://wow.zamimg.com" />
   <style>
     :root {
@@ -24,7 +24,15 @@ const { title = 'WoW Market', requireAuth = true } = Astro.props;
       --topbar-h: 44px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { background: var(--bg); color: #d4c5a0; min-height: 100vh; font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; }
+    html { background: var(--bg); }
+    body { background: transparent; color: #d4c5a0; min-height: 100vh; font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; }
+    body::before {
+      content: ''; position: fixed; inset: 0;
+      background: url('/bg.png') center top / cover no-repeat;
+      -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0.72) 0%, transparent 50%);
+      mask-image: linear-gradient(to bottom, rgba(0,0,0,0.72) 0%, transparent 50%);
+      pointer-events: none; z-index: -1;
+    }
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: var(--bg2); }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
@@ -39,16 +47,20 @@ const { title = 'WoW Market', requireAuth = true } = Astro.props;
     }
     .top-logo {
       width: var(--sidebar-w); flex-shrink: 0;
-      font-size: 16px; font-weight: 900; color: var(--gold);
-      letter-spacing: 0.06em; display: flex; align-items: center; gap: 7px;
+      font-size: 13px; font-weight: 900; color: var(--gold);
+      letter-spacing: 0.05em; text-transform: uppercase;
+      display: flex; align-items: center; gap: 7px; white-space: nowrap;
     }
-    .top-logo .sword { font-size: 18px; }
+    .logo-icon {
+      height: 30px; width: 30px; object-fit: cover;
+      border-radius: 4px; flex-shrink: 0;
+    }
     .top-bar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
-    .top-realm-select {
+    .top-realm-select, .top-select {
       background: var(--bg3); border: 1px solid var(--border);
       color: #d4c5a0; font-size: 12px; padding: 4px 8px;
       border-radius: 5px; outline: none; cursor: pointer;
-      color-scheme: dark;
+      color-scheme: dark; max-width: 170px;
     }
     .top-login { font-size: 12px; color: var(--blue); padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); }
     .top-login:hover { border-color: var(--blue); }
@@ -117,15 +129,18 @@ const { title = 'WoW Market', requireAuth = true } = Astro.props;
   <!-- Top bar -->
   <header class="top-bar">
     <div class="top-logo">
-      <span class="sword">&#9876;</span>
-      YARP!
+      <img src="/icon.png" class="logo-icon" alt="" />
+      Icecrown Citadel
     </div>
     <div class="top-bar-right">
-      <select class="top-realm-select" id="region-select">
+      <select class="top-select" id="region-select">
         <option value="us">US</option>
         <option value="eu">EU</option>
         <option value="tw">TW</option>
         <option value="kr">KR</option>
+      </select>
+      <select class="top-select" id="realm-select" title="Select realm">
+        <option value="0">Loading realms…</option>
       </select>
       <a href="/login" class="top-login" id="nav-login">Login</a>
       <span class="top-user" id="nav-user" style="display:none;"></span>
@@ -202,17 +217,89 @@ const { title = 'WoW Market', requireAuth = true } = Astro.props;
       if (loginEl) loginEl.style.display = 'none';
     }
 
-    // Region selector — persists to localStorage, drives all market pages
+    // ── Region + Realm selectors ────────────────────────────────────────────
+    const API_BASE = 'https://wow-market-api.benjamin-f-mcdaniel.workers.dev/api';
+    let allRealms = [];
+    let realmsWithData = new Set();
+
+    function buildRealmOptions(region, savedRealmId) {
+      const realmSel = document.getElementById('realm-select');
+      if (!realmSel) return;
+      const filtered = allRealms.filter(r => r.region === region);
+      // Split connected realms into individual name entries
+      const individual = [];
+      for (const cr of filtered) {
+        for (const name of cr.name.split(' / ')) {
+          individual.push({ id: cr.id, name: name.trim(), hasData: realmsWithData.has(cr.id) });
+        }
+      }
+      individual.sort((a, b) => {
+        if (a.hasData !== b.hasData) return a.hasData ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+      realmSel.innerHTML = '';
+      const withGroup = document.createElement('optgroup');
+      withGroup.label = '— Realms with data';
+      const withoutGroup = document.createElement('optgroup');
+      withoutGroup.label = '— Other realms';
+      let selectedId = savedRealmId;
+      for (const r of individual) {
+        const opt = document.createElement('option');
+        opt.value = r.id;
+        opt.textContent = r.name;
+        (r.hasData ? withGroup : withoutGroup).appendChild(opt);
+      }
+      if (withGroup.children.length) realmSel.appendChild(withGroup);
+      if (withoutGroup.children.length) realmSel.appendChild(withoutGroup);
+      // Select saved or first-with-data
+      if (!selectedId || !individual.find(r => r.id === selectedId)) {
+        const first = individual.find(r => r.hasData) ?? individual[0];
+        selectedId = first?.id ?? 0;
+      }
+      if (selectedId) {
+        realmSel.value = selectedId;
+        localStorage.setItem(`wow_market_realm_${region}`, String(selectedId));
+        window.dispatchEvent(new CustomEvent('realmChanged', { detail: { realmId: selectedId } }));
+      }
+    }
+
+    async function loadRealms(region) {
+      const savedRealmId = parseInt(localStorage.getItem(`wow_market_realm_${region}`) ?? '0');
+      if (allRealms.length === 0) {
+        const [realmsRes, withDataRes] = await Promise.all([
+          fetch(`${API_BASE}/realms`).then(r => r.json()).catch(() => []),
+          fetch(`${API_BASE}/realms/with-data`).then(r => r.json()).catch(() => []),
+        ]);
+        allRealms = Array.isArray(realmsRes) ? realmsRes : [];
+        realmsWithData = new Set(Array.isArray(withDataRes) ? withDataRes : []);
+      }
+      buildRealmOptions(region, savedRealmId);
+    }
+
     const savedRegion = localStorage.getItem('wow_market_region') ?? 'us';
     const regionSel = document.getElementById('region-select');
+    const realmSel = document.getElementById('realm-select');
+
     if (regionSel) {
       regionSel.value = savedRegion;
       regionSel.addEventListener('change', (e) => {
         const region = e.target.value;
         localStorage.setItem('wow_market_region', region);
         window.dispatchEvent(new CustomEvent('regionChanged', { detail: { region } }));
+        loadRealms(region);
       });
     }
+
+    if (realmSel) {
+      realmSel.addEventListener('change', (e) => {
+        const realmId = parseInt(e.target.value);
+        const region = localStorage.getItem('wow_market_region') ?? 'us';
+        localStorage.setItem(`wow_market_realm_${region}`, String(realmId));
+        window.dispatchEvent(new CustomEvent('realmChanged', { detail: { realmId } }));
+      });
+    }
+
+    loadRealms(savedRegion);
 
     // Highlight active nav item
     const path = window.location.pathname.replace(/\/$/, '') || '/';

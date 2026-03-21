@@ -61,16 +61,27 @@ export default function ItemDetail({ itemKey }: Props) {
   const [meta, setMeta] = useState<ItemMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFav, setIsFav] = useState(false);
-  const [realmId] = useState<number>(() => {
+  const [realmId, setRealmId] = useState<number>(() => {
     if (typeof localStorage === 'undefined') return 0;
     const region = localStorage.getItem('wow_market_region') ?? 'us';
     return parseInt(localStorage.getItem(`wow_market_realm_${region}`) ?? '0');
   });
 
+  // Sync with global realm selector in the top bar
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const id = (e as CustomEvent).detail?.realmId;
+      if (id) setRealmId(id);
+    };
+    window.addEventListener('realmChanged', handler);
+    return () => window.removeEventListener('realmChanged', handler);
+  }, []);
+
   useEffect(() => {
     if (!itemKey) return;
     const itemId = parseInt(itemKey.split(':')[0]);
     setLoading(true);
+    setState(null);
     Promise.allSettled([
       catalogApi.item(itemId),
       realmId ? items.getState(itemKey, realmId) : Promise.reject('no realm'),
@@ -131,7 +142,7 @@ export default function ItemDetail({ itemKey }: Props) {
             {meta?.itemLevel ? <><span>·</span><span>ilvl {meta.itemLevel}</span></> : null}
             {meta?.class !== undefined ? <><span>·</span><span>{ITEM_CLASS_NAMES[meta.class] ?? `Class ${meta.class}`}</span></> : null}
             {meta?.expansion !== undefined ? <><span>·</span><span>{EXPANSION_NAMES[meta.expansion] ?? ''}</span></> : null}
-            {meta?.stackSize && meta.stackSize > 1 ? <><span>·</span><span>Stack ×{meta.stackSize}</span></> : null}
+            {meta?.stack && meta.stack > 1 ? <><span>·</span><span>Stack ×{meta.stack}</span></> : null}
           </div>
         </div>
         <div className="text-right shrink-0">
@@ -191,7 +202,7 @@ export default function ItemDetail({ itemKey }: Props) {
                 ['Item Level',    meta?.itemLevel ? String(meta.itemLevel) : '—'],
                 ['Item Class',    meta?.class !== undefined ? `${ITEM_CLASS_NAMES[meta.class] ?? meta.class} (${meta.class}.${meta.subclass ?? 0})` : '—'],
                 ['Expansion',     meta?.expansion !== undefined ? (EXPANSION_NAMES[meta.expansion] ?? String(meta.expansion)) : '—'],
-                ['Stack Size',    meta?.stackSize ? String(meta.stackSize) : '—'],
+                ['Stack Size',    meta?.stack ? String(meta.stack) : '—'],
                 ['Vendor Price',  meta?.vendorPrice ? formatGold(meta.vendorPrice) : '—'],
                 ['Current Price', formatGold(state?.price ?? null)],
                 ['Region Median', '—'],

@@ -35,3 +35,6 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+#tmp --- cleanup
+marketapp/scripts/import-tmp/*

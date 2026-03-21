@@ -62,7 +62,7 @@ export interface ItemMeta {
   expansion: number;
   icon: string;
   vendorPrice?: number;
-  stackSize: number;
+  stack: number;
 }
 
 // ─── Auction / Price Data ────────────────────────────────────────────────────
