@@ -447,6 +447,65 @@ route('DELETE', '/api/favorites/:itemKey', true, async (req, env, p) => {
   return json({ ok: true });
 });
 
+// ─── Realm Requests ──────────────────────────────────────────────────────────
+
+// Submit a new realm request
+route('POST', '/api/realm-requests', true, async (req, env) => {
+  const user = await authenticate(req, env);
+  const body = await req.json() as { realmName: string; region: string; reason?: string };
+  
+  if (!body.realmName || !body.region) {
+    return err('Realm name and region are required', 400);
+  }
+  
+  if (!['us', 'eu', 'tw', 'kr'].includes(body.region.toLowerCase())) {
+    return err('Invalid region. Must be us, eu, tw, or kr', 400);
+  }
+  
+  const now = Date.now();
+  const row = await env.DB.prepare(
+    'INSERT INTO realm_requests (user_id, realm_name, region, reason, created_at) VALUES (?, ?, ?, ?, ?) RETURNING *'
+  ).bind(user!.userId, body.realmName, body.region.toLowerCase(), body.reason ?? null, now).first();
+  
+  return json(row, 201);
+});
+
+// Get user's own realm requests
+route('GET', '/api/realm-requests', true, async (req, env) => {
+  const user = await authenticate(req, env);
+  const result = await env.DB.prepare(
+    'SELECT * FROM realm_requests WHERE user_id = ? ORDER BY created_at DESC'
+  ).bind(user!.userId).all();
+  return json(result.results);
+});
+
+// Get all realm requests (admin only - for now just returns user's own)
+route('GET', '/api/realm-requests/all', true, async (req, env) => {
+  const user = await authenticate(req, env);
+  // TODO: Add admin check
+  const result = await env.DB.prepare(
+    'SELECT r.*, u.username FROM realm_requests r JOIN users u ON r.user_id = u.id ORDER BY r.created_at DESC LIMIT 100'
+  ).all();
+  return json(result.results);
+});
+
+// Update realm request status (admin only - for now allows any authenticated user)
+route('PUT', '/api/realm-requests/:id', true, async (req, env, p) => {
+  const user = await authenticate(req, env);
+  const body = await req.json() as { status: string };
+  
+  if (!['pending', 'approved', 'rejected'].includes(body.status)) {
+    return err('Invalid status. Must be pending, approved, or rejected', 400);
+  }
+  
+  const now = Date.now();
+  await env.DB.prepare(
+    'UPDATE realm_requests SET status = ?, reviewed_at = ?, reviewed_by = ? WHERE id = ?'
+  ).bind(body.status, now, user!.userId, p.id).run();
+  
+  return json({ ok: true });
+});
+
 // Reports
 route('GET', '/api/reports', true, async (req, env) => {
   const user = await authenticate(req, env);

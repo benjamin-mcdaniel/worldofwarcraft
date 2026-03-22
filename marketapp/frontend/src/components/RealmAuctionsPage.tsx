@@ -61,7 +61,8 @@ export default function RealmAuctionsPage() {
     setLoading(true);
     setError(null);
     
-    fetch(`/api/realm/${realmId}/auctions`)
+    const API_BASE = 'https://wow-market-api.benjamin-f-mcdaniel.workers.dev/api';
+    fetch(`${API_BASE}/realm/${realmId}/auctions`)
       .then(res => {
         if (!res.ok) throw new Error(`Failed to fetch auctions: ${res.status}`);
         return res.json();
@@ -219,7 +220,6 @@ export default function RealmAuctionsPage() {
               {sortedItems.map(item => {
                 const itemId = parseInt(item.itemKey.split(':')[0]);
                 const meta = itemMetas[itemId];
-                if (!meta) return null;
 
                 return (
                   <a
@@ -227,18 +227,22 @@ export default function RealmAuctionsPage() {
                     href={`/item/${encodeURIComponent(item.itemKey)}?realm=${realmId}`}
                     className="grid grid-cols-[auto_1fr_auto_auto] gap-4 p-4 hover:bg-bg3 transition-colors items-center"
                   >
-                    <img
-                      src={`https://render.worldofwarcraft.com/us/icons/56/${meta.icon}.jpg`}
-                      alt={meta.name}
-                      className="w-12 h-12 rounded border-2"
-                      style={{ borderColor: QUALITY_COLORS[meta.quality] || '#9d9d9d' }}
-                    />
+                    {meta ? (
+                      <img
+                        src={`https://render.worldofwarcraft.com/us/icons/56/${meta.icon}.jpg`}
+                        alt={meta.name}
+                        className="w-12 h-12 rounded border-2"
+                        style={{ borderColor: QUALITY_COLORS[meta.quality] || '#9d9d9d' }}
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded border-2 border-border bg-bg3 animate-pulse" />
+                    )}
                     <div>
                       <div
                         className="font-semibold"
-                        style={{ color: QUALITY_COLORS[meta.quality] || '#ffffff' }}
+                        style={{ color: meta ? QUALITY_COLORS[meta.quality] || '#ffffff' : '#ffffff' }}
                       >
-                        {meta.name}
+                        {meta ? meta.name : `Item ${itemId}`}
                       </div>
                       <div className="text-sm text-text2">{item.itemKey}</div>
                     </div>

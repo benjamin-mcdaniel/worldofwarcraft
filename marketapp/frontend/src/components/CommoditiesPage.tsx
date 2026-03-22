@@ -46,7 +46,8 @@ export default function CommoditiesPage() {
     setLoading(true);
     setError(null);
     
-    fetch(`/api/commodities/${region}`)
+    const API_BASE = 'https://wow-market-api.benjamin-f-mcdaniel.workers.dev/api';
+    fetch(`${API_BASE}/commodities/${region}`)
       .then(res => {
         if (!res.ok) throw new Error(`Failed to fetch commodities: ${res.status}`);
         return res.json();
@@ -185,7 +186,6 @@ export default function CommoditiesPage() {
             <div className="divide-y divide-border">
               {sortedItems.map(item => {
                 const meta = itemMetas[item.itemId];
-                if (!meta) return null;
 
                 return (
                   <a
@@ -193,18 +193,22 @@ export default function CommoditiesPage() {
                     href={`/commodity/${item.itemId}?region=${region}`}
                     className="grid grid-cols-[auto_1fr_auto_auto] gap-4 p-4 hover:bg-bg3 transition-colors items-center"
                   >
-                    <img
-                      src={`https://render.worldofwarcraft.com/us/icons/56/${meta.icon}.jpg`}
-                      alt={meta.name}
-                      className="w-12 h-12 rounded border-2"
-                      style={{ borderColor: QUALITY_COLORS[meta.quality] || '#9d9d9d' }}
-                    />
+                    {meta ? (
+                      <img
+                        src={`https://render.worldofwarcraft.com/us/icons/56/${meta.icon}.jpg`}
+                        alt={meta.name}
+                        className="w-12 h-12 rounded border-2"
+                        style={{ borderColor: QUALITY_COLORS[meta.quality] || '#9d9d9d' }}
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded border-2 border-border bg-bg3 animate-pulse" />
+                    )}
                     <div>
                       <div
                         className="font-semibold"
-                        style={{ color: QUALITY_COLORS[meta.quality] || '#ffffff' }}
+                        style={{ color: meta ? QUALITY_COLORS[meta.quality] || '#ffffff' : '#ffffff' }}
                       >
-                        {meta.name}
+                        {meta ? meta.name : `Item ${item.itemId}`}
                       </div>
                       <div className="text-sm text-text2">Item ID: {item.itemId}</div>
                     </div>
