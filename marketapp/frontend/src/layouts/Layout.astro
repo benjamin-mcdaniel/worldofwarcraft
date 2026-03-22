@@ -12,6 +12,8 @@ const { title = 'Icecrown Citadel', requireAuth = true } = Astro.props;
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{title} — Icecrown Citadel</title>
   <link rel="preconnect" href="https://wow.zamimg.com" />
+  <script is:inline>const whTooltips = {colorLinks: true, iconizeLinks: true, renameLinks: true};</script>
+  <script is:inline src="https://wow.zamimg.com/widgets/power.js"></script>
   <style>
     :root {
       --bg: #0d0d0f;

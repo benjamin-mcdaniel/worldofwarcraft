@@ -190,13 +190,13 @@ export default function CommoditiesPage() {
                 return (
                   <a
                     key={item.itemId}
-                    href={`/commodity/${item.itemId}?region=${region}`}
+                    href={`/item/${item.itemId}%3A0%3A0?realm=60`}
                     className="grid grid-cols-[auto_1fr_auto_auto] gap-4 p-4 hover:bg-bg3 transition-colors items-center"
                   >
                     {meta ? (
                       <img
                         src={`https://render.worldofwarcraft.com/us/icons/56/${meta.icon}.jpg`}
-                        alt={meta.name}
+                        alt=""
                         className="w-12 h-12 rounded border-2"
                         style={{ borderColor: QUALITY_COLORS[meta.quality] || '#9d9d9d' }}
                       />
@@ -204,12 +204,16 @@ export default function CommoditiesPage() {
                       <div className="w-12 h-12 rounded border-2 border-border bg-bg3 animate-pulse" />
                     )}
                     <div>
-                      <div
+                      <a
+                        href={`https://www.wowhead.com/item=${item.itemId}`}
+                        data-wowhead={`item=${item.itemId}`}
                         className="font-semibold"
                         style={{ color: meta ? QUALITY_COLORS[meta.quality] || '#ffffff' : '#ffffff' }}
+                        target="_blank"
+                        rel="noopener noreferrer"
                       >
-                        {meta ? meta.name : `Item ${item.itemId}`}
-                      </div>
+                        [Item {item.itemId}]
+                      </a>
                       <div className="text-sm text-text2">Item ID: {item.itemId}</div>
                     </div>
                     <div className="text-right font-mono">

@@ -156,12 +156,12 @@ export default function RealmAuctionsPage() {
           ) : (
             realmsList.map(realm => (
               <option key={realm.id} value={realm.id}>
-                {realm.canonical.name} ({realm.region.toUpperCase()})
+                {realm.canonical?.name || `Realm ${realm.id}`} ({realm.region.toUpperCase()})
               </option>
             ))
           )}
         </select>
-        {selectedRealm && (
+        {selectedRealm && selectedRealm.canonical && (
           <p className="mt-2 text-sm text-text2">
             Viewing auctions for <span className="text-blue">{selectedRealm.canonical.name}</span>
           </p>
@@ -230,7 +230,7 @@ export default function RealmAuctionsPage() {
                     {meta ? (
                       <img
                         src={`https://render.worldofwarcraft.com/us/icons/56/${meta.icon}.jpg`}
-                        alt={meta.name}
+                        alt=""
                         className="w-12 h-12 rounded border-2"
                         style={{ borderColor: QUALITY_COLORS[meta.quality] || '#9d9d9d' }}
                       />
@@ -238,12 +238,16 @@ export default function RealmAuctionsPage() {
                       <div className="w-12 h-12 rounded border-2 border-border bg-bg3 animate-pulse" />
                     )}
                     <div>
-                      <div
+                      <a
+                        href={`https://www.wowhead.com/item=${itemId}`}
+                        data-wowhead={`item=${itemId}`}
                         className="font-semibold"
                         style={{ color: meta ? QUALITY_COLORS[meta.quality] || '#ffffff' : '#ffffff' }}
+                        target="_blank"
+                        rel="noopener noreferrer"
                       >
-                        {meta ? meta.name : `Item ${itemId}`}
-                      </div>
+                        [Item {itemId}]
+                      </a>
                       <div className="text-sm text-text2">{item.itemKey}</div>
                     </div>
                     <div className="text-right font-mono">
